@@ -53,7 +53,7 @@ Moves can be created using square indices, UCI notation, or SAN notation.
 Squares are represented as numbers 0-63, where 0 is a1, 7 is h1, 56 is a8, and 63 is h8.
 
 ```typescript
-import { parseSquare, makeSquare } from 'chessops/util';
+import { parseSquare, makeSquare } from 'chessops';
 
 // Convert square names to indices
 const e2 = parseSquare('e2'); // 12
@@ -78,7 +78,7 @@ pos.play(move);
 
 ```typescript Using UCI Notation
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 
@@ -168,7 +168,7 @@ Always clone a position before making moves if you want to preserve the original
 
 ```typescript
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const original = Chess.default();
 
@@ -191,7 +191,7 @@ Convert positions to various formats for storage or display.
 ```typescript To FEN
 import { Chess } from 'chessops/chess';
 import { makeFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 pos.play(parseUci('e2e4')!);

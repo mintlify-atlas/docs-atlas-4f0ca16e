@@ -11,13 +11,16 @@ Get all legal moves from the current position.
 
 ```typescript
 import { Chess } from 'chessops/chess';
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 const pos = Chess.default();
 
 // Get all legal moves
-for (const move of pos.legalMoves()) {
-  console.log(makeUci(move)); // e2e3, e2e4, d2d3, d2d4, etc.
+for (const [from, dests] of pos.allDests()) {
+  for (const to of dests) {
+    const move = { from, to };
+    console.log(makeUci(move)); // e2e3, e2e4, d2d3, d2d4, etc.
+  }
 }
 ```
 
@@ -32,8 +35,8 @@ const pos = Chess.default();
 
 // Count legal moves
 let count = 0;
-for (const _move of pos.legalMoves()) {
-  count++;
+for (const [_from, dests] of pos.allDests()) {
+  count += dests.size();
 }
 
 console.log(`Legal moves: ${count}`); // 20
@@ -46,7 +49,7 @@ Validate whether a specific move is legal in the current position.
 <CodeGroup>
 ```typescript Basic Legality Check
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 
@@ -87,16 +90,19 @@ Chessops distinguishes between different types of moves.
 <Step title="Normal Moves">
 ```typescript
 import { Chess } from 'chessops/chess';
-import { isNormal, parseUci } from 'chessops/util';
+import { isNormal } from 'chessops';
 import { makeSan } from 'chessops/san';
 
 const pos = Chess.default();
 
-for (const move of pos.legalMoves()) {
-  if (isNormal(move)) {
-    console.log(`${makeSan(pos, move)}: from ${move.from} to ${move.to}`);
-    if (move.promotion) {
-      console.log(`  Promotes to: ${move.promotion}`);
+for (const [from, dests] of pos.allDests()) {
+  for (const to of dests) {
+    const move = { from, to };
+    if (isNormal(move)) {
+      console.log(`${makeSan(pos, move)}: from ${move.from} to ${move.to}`);
+      if (move.promotion) {
+        console.log(`  Promotes to: ${move.promotion}`);
+      }
     }
   }
 }
@@ -107,7 +113,7 @@ for (const move of pos.legalMoves()) {
 ```typescript
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 import { castlingSide } from 'chessops/chess';
 
 // Position where castling is possible
@@ -128,7 +134,7 @@ console.log(pos.isLegal(queenSide)); // true
 ```typescript
 import { Chess } from 'chessops/chess';
 import { parseFen, makeFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 // Set up position with en passant opportunity
 const setup = parseFen('8/8/8/5k2/3pP3/8/8/4K3 b - e3 0 1').unwrap();
@@ -148,7 +154,7 @@ console.log(makeFen(pos.toSetup()));
 ```typescript
 import { Crazyhouse } from 'chessops/variant';
 import { parseFen } from 'chessops/fen';
-import { isDrop, parseUci } from 'chessops/util';
+import { isDrop, parseUci } from 'chessops';
 
 // Crazyhouse position with pieces in pocket
 const setup = parseFen('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R[Pp] w KQkq - 0 1').unwrap();
@@ -176,10 +182,12 @@ function perft(pos: Chess, depth: number): number {
   if (depth === 0) return 1;
   
   let nodes = 0;
-  for (const move of pos.legalMoves()) {
-    const child = pos.clone();
-    child.play(move);
-    nodes += perft(child, depth - 1);
+  for (const [from, dests] of pos.allDests()) {
+    for (const to of dests) {
+      const child = pos.clone();
+      child.play({ from, to });
+      nodes += perft(child, depth - 1);
+    }
   }
   
   return nodes;
@@ -198,19 +206,18 @@ Filter moves by piece type or origin square.
 
 ```typescript
 import { Chess } from 'chessops/chess';
-import { parseSquare, makeSquare, makeUci } from 'chessops/util';
-import { isNormal } from 'chessops/util';
+import { parseSquare, makeSquare, makeUci } from 'chessops';
+import { isNormal } from 'chessops';
 
 const pos = Chess.default();
 
 // Get all moves from a specific square
 const e2 = parseSquare('e2')!;
+const dests = pos.dests(e2);
 const movesFromE2: string[] = [];
 
-for (const move of pos.legalMoves()) {
-  if (isNormal(move) && move.from === e2) {
-    movesFromE2.push(makeUci(move));
-  }
+for (const to of dests) {
+  movesFromE2.push(makeUci({ from: e2, to }));
 }
 
 console.log(movesFromE2); // ['e2e3', 'e2e4']
@@ -219,9 +226,9 @@ console.log(movesFromE2); // ['e2e3', 'e2e4']
 const knightSquares = pos.board.knight.intersect(pos.board.white);
 const knightMoves: string[] = [];
 
-for (const move of pos.legalMoves()) {
-  if (isNormal(move) && knightSquares.has(move.from)) {
-    knightMoves.push(makeUci(move));
+for (const from of knightSquares) {
+  for (const to of pos.dests(from)) {
+    knightMoves.push(makeUci({ from, to }));
   }
 }
 
@@ -235,7 +242,7 @@ Understand why a move might be illegal.
 ```typescript
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 // Position where king is in check
 const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2').unwrap();
@@ -252,8 +259,10 @@ if (pos.isCheck()) {
   console.log('King is in check - must move king or block');
   
   // Only moves that get out of check are legal
-  for (const move of pos.legalMoves()) {
-    console.log(makeUci(move));
+  for (const [from, dests] of pos.allDests()) {
+    for (const to of dests) {
+      console.log(makeUci({ from, to }));
+    }
   }
 }
 ```
@@ -265,7 +274,7 @@ Generate and compare different move sequences.
 ```typescript
 import { Chess } from 'chessops/chess';
 import { parseSan, makeSanVariation } from 'chessops/san';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 // Create multiple variations from the same position
 const pos = Chess.default();
@@ -297,7 +306,7 @@ Some moves can be represented in multiple ways (e.g., castling).
 ```typescript
 import { Chess, normalizeMove } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
 const pos = Chess.fromSetup(setup).unwrap();

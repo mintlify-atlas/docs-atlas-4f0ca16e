@@ -368,8 +368,8 @@ const transformedTree = transform(
     
     // Count legal moves in resulting position
     let legalMoves = 0;
-    for (const _m of pos.legalMoves()) {
-      legalMoves++;
+    for (const [_from, dests] of pos.allDests()) {
+      legalMoves += dests.size();
     }
     
     return {

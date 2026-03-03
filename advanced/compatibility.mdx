@@ -112,7 +112,7 @@ Converts a chessops move to chessground's array format.
 
 ```typescript
 import { chessgroundMove } from 'chessops/compat';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const move = parseUci('e2e4')!;
 const cgMove = chessgroundMove(move);
@@ -130,7 +130,7 @@ const cgDrop = chessgroundMove(drop);
 import { chessgroundDests, chessgroundMove } from 'chessops/compat';
 import { Chess } from 'chessops/chess';
 import { parseFen, makeFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 // Initialize position
 const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
@@ -188,7 +188,7 @@ Encodes a move as a two-character string compatible with scalachess.
 
 ```typescript
 import { scalachessCharPair } from 'chessops/compat';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const move = parseUci('e2e4')!;
 const encoded = scalachessCharPair(move);

@@ -44,8 +44,8 @@ This guide will walk you through the basics of using chessops to work with chess
     import { parseSquare } from 'chessops';
     
     // Get all legal moves
-    const moves = pos.legalMoves();
-    console.log(`${moves.size()} legal moves available`);
+    const moves = pos.allDests();
+    console.log(`${moves.size} legal destinations available`);
     
     // Get legal moves from a specific square (e4)
     const e2 = parseSquare('e2')!;

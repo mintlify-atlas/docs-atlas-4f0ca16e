@@ -83,8 +83,8 @@ console.log(pos.isCheckmate()); // false
 
 // Count legal moves
 let legalMoves = 0;
-for (const _move of pos.legalMoves()) {
-  legalMoves++;
+for (const [_from, dests] of pos.allDests()) {
+  legalMoves += dests.size();
 }
 console.log(legalMoves); // 0
 ```
@@ -219,7 +219,7 @@ Find which pieces attack specific squares.
 
 ```typescript
 import { Chess } from 'chessops/chess';
-import { parseSquare } from 'chessops/util';
+import { parseSquare } from 'chessops';
 
 const pos = Chess.default();
 
@@ -245,7 +245,7 @@ Detect pieces that are pinned to the king.
 ```typescript
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseSquare, makeSquare } from 'chessops/util';
+import { parseSquare, makeSquare } from 'chessops';
 
 // Position with pinned knight
 const fen = 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 1';
@@ -371,7 +371,7 @@ Visualize squares controlled by each side.
 ```typescript
 import { Chess } from 'chessops/chess';
 import { SquareSet } from 'chessops/squareSet';
-import { makeSquare } from 'chessops/util';
+import { makeSquare } from 'chessops';
 import { attacks } from 'chessops/attacks';
 
 const pos = Chess.default();

@@ -105,7 +105,7 @@ import { parseFen } from 'chessops/fen';
 const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
 const pos = Chess.fromSetup(setup).unwrap();
 
-console.log('Legal moves:', pos.legalMoves().size());
+console.log('Legal moves:', pos.allDests().size);
 ```
 
 Run it with:

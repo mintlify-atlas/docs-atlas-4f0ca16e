@@ -14,7 +14,7 @@ Generates SAN notation for a move without mutating the position.
 ```typescript
 import { makeSan } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseSquare } from 'chessops/util';
+import { parseSquare } from 'chessops';
 
 const pos = Chess.default();
 const move = { from: parseSquare('e2')!, to: parseSquare('e4')! };
@@ -47,7 +47,7 @@ Generates SAN notation for a move and plays it on the position.
 ```typescript
 import { makeSanAndPlay } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseSquare } from 'chessops/util';
+import { parseSquare } from 'chessops';
 
 const pos = Chess.default();
 const move = { from: parseSquare('e2')!, to: parseSquare('e4')! };
@@ -84,7 +84,7 @@ Generates SAN notation for a sequence of moves (variation).
 ```typescript
 import { makeSanVariation } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseSquare } from 'chessops/util';
+import { parseSquare } from 'chessops';
 
 const pos = Chess.default();
 const variation = [

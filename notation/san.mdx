@@ -99,7 +99,7 @@ Generates the SAN string for a move without modifying the position:
 ```typescript
 import { makeSan } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 const move = parseUci('e2e4')!;
@@ -116,7 +116,7 @@ Generates the SAN string and plays the move on the position:
 ```typescript
 import { makeSanAndPlay } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 const move = parseUci('e2e4')!;
@@ -137,7 +137,7 @@ Generates a full variation with move numbers:
 ```typescript
 import { makeSanVariation } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const pos = Chess.default();
 const variation = [
@@ -160,7 +160,7 @@ The position passed to `makeSanVariation` is cloned internally, so the original 
 import { makeSanVariation } from 'chessops/san';
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const setup = parseFen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1').unwrap();
 const pos = Chess.fromSetup(setup).unwrap();
@@ -179,7 +179,7 @@ The library automatically handles all disambiguation cases:
 import { makeSan } from 'chessops/san';
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 // Position with knights that can move to the same square
 const setup = parseFen('N3k2N/8/8/3N4/N4N1N/2R5/1R6/4K3 w - -').unwrap();
@@ -299,7 +299,7 @@ console.log(san); // '--'
 ```typescript
 import { parseSan, makeSan } from 'chessops/san';
 import { Chess } from 'chessops/chess';
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 function uciToSan(pos: Chess, uci: string): string | undefined {
   const move = parseUci(uci);

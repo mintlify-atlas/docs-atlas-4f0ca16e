@@ -21,7 +21,7 @@ Unlike SAN, UCI notation doesn't require the current position to be parsed, maki
 Parses a UCI string into a `Move` object:
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const move = parseUci('e2e4');
 console.log(move); // { from: 12, to: 28 }
@@ -34,7 +34,7 @@ console.log(move); // { from: 12, to: 28 }
 ### Normal Moves
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const move = parseUci('g1f3');
 console.log(move); // { from: 6, to: 21 }
@@ -47,7 +47,7 @@ The move is represented as square indices:
 ### Promotions
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const queenPromo = parseUci('e7e8q');
 console.log(queenPromo); // { from: 52, to: 60, promotion: 'queen' }
@@ -66,7 +66,7 @@ Promotion pieces:
 ### Crazyhouse Drops
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 const drop = parseUci('N@f3');
 console.log(drop); // { role: 'knight', to: 21 }
@@ -83,7 +83,7 @@ Drop format: `{PIECE}@{square}`
 ### Invalid UCI
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 
 console.log(parseUci('invalid'));    // undefined
 console.log(parseUci('e2'));         // undefined (too short)
@@ -99,7 +99,7 @@ console.log(parseUci('e2e4x'));      // undefined (invalid promotion)
 Converts a `Move` object to UCI notation:
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 const move = { from: 12, to: 28 };
 const uci = makeUci(move);
@@ -110,7 +110,7 @@ console.log(uci); // 'e2e4'
 ### Normal Moves
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 const move = { from: 6, to: 21 };
 console.log(makeUci(move)); // 'g1f3'
@@ -122,7 +122,7 @@ console.log(makeUci(capture)); // 'e7d8'
 ### Promotions
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 const queenPromo = { from: 52, to: 60, promotion: 'queen' };
 console.log(makeUci(queenPromo)); // 'e7e8q'
@@ -137,7 +137,7 @@ console.log(makeUci(rookPromo)); // 'd1d1r'
 ### Crazyhouse Drops
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 const knightDrop = { role: 'knight', to: 21 };
 console.log(makeUci(knightDrop)); // 'N@f3'
@@ -155,7 +155,7 @@ Drops are always written with uppercase piece letters, regardless of color.
 In chessops, castling moves are represented as the king moving to the rook's square:
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 
 // Kingside castling (white)
 const kingsideCastle = { from: 4, to: 7 }; // e1 to h1
@@ -179,7 +179,7 @@ Some UCI implementations expect castling as king-to-king-destination (e.g., `e1g
 ### Parsing and Playing
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 import { Chess } from 'chessops/chess';
 
 const pos = Chess.default();
@@ -196,7 +196,7 @@ if (move && pos.isLegal(move)) {
 ### Generating Legal Moves
 
 ```typescript
-import { makeUci } from 'chessops/util';
+import { makeUci } from 'chessops';
 import { Chess } from 'chessops/chess';
 
 const pos = Chess.default();
@@ -214,7 +214,7 @@ for (const [from, dests] of pos.allDests()) {
 ### Converting Between UCI and SAN
 
 ```typescript
-import { parseUci, makeUci } from 'chessops/util';
+import { parseUci, makeUci } from 'chessops';
 import { parseSan, makeSan } from 'chessops/san';
 import { Chess } from 'chessops/chess';
 
@@ -242,7 +242,7 @@ console.log(sanToUci(pos, 'Nf3')); // 'g1f3'
 Compares two moves for equality:
 
 ```typescript
-import { parseUci, moveEquals } from 'chessops/util';
+import { parseUci, moveEquals } from 'chessops';
 
 const move1 = parseUci('e2e4')!;
 const move2 = parseUci('e2e4')!;
@@ -255,7 +255,7 @@ console.log(moveEquals(move1, move3)); // false
 Works with all move types:
 
 ```typescript
-import { parseUci, moveEquals } from 'chessops/util';
+import { parseUci, moveEquals } from 'chessops';
 
 // Normal moves
 const a = parseUci('e2e4')!;
@@ -282,7 +282,7 @@ The library also provides square conversion utilities:
 Convert square index to square name:
 
 ```typescript
-import { makeSquare } from 'chessops/util';
+import { makeSquare } from 'chessops';
 
 console.log(makeSquare(0));  // 'a1'
 console.log(makeSquare(63)); // 'h8'
@@ -294,7 +294,7 @@ console.log(makeSquare(28)); // 'e4'
 Convert square name to index:
 
 ```typescript
-import { parseSquare } from 'chessops/util';
+import { parseSquare } from 'chessops';
 
 console.log(parseSquare('a1'));  // 0
 console.log(parseSquare('h8'));  // 63
@@ -305,7 +305,7 @@ console.log(parseSquare('z9'));  // undefined (invalid)
 ### Square Coordinates
 
 ```typescript
-import { squareFile, squareRank, squareFromCoords } from 'chessops/util';
+import { squareFile, squareRank, squareFromCoords } from 'chessops';
 
 const square = 28; // e4
 console.log(squareFile(square)); // 4 (e file)
@@ -318,7 +318,7 @@ console.log(reconstructed); // 28
 ## Complete Example: UCI Engine Interface
 
 ```typescript
-import { parseUci, makeUci } from 'chessops/util';
+import { parseUci, makeUci } from 'chessops';
 import { Chess } from 'chessops/chess';
 import { makeSan } from 'chessops/san';
 
@@ -392,7 +392,7 @@ console.log(`${legalMoves.length} legal moves available`);
 Check move types:
 
 ```typescript
-import { parseUci } from 'chessops/util';
+import { parseUci } from 'chessops';
 import { isDrop, isNormal } from 'chessops/types';
 
 const normalMove = parseUci('e2e4')!;
