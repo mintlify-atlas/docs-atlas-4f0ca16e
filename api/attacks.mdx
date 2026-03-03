@@ -1,0 +1,325 @@
+---
+title: Attacks
+description: Compute attacks, rays, and between-square relationships for chess pieces
+---
+
+The attacks module provides low-level functions for computing piece attacks and geometric relationships between squares. These functions are essential for implementing chess rules and move generation.
+
+<Note>
+Sliding attacks are computed using [Hyperbola Quintessence](https://www.chessprogramming.org/Hyperbola_Quintessence), which provides a good balance between lookup speed and initialization time.
+</Note>
+
+## Attack Functions
+
+### kingAttacks
+
+Gets all squares attacked or defended by a king on a given square.
+
+```typescript
+import { kingAttacks } from 'chessops/attacks';
+
+const attacks = kingAttacks(27); // e4
+console.log(attacks.has(28)); // true (f4)
+console.log(attacks.has(36)); // true (e5)
+```
+
+<ParamField path="square" type="Square" required>
+  The square where the king is located (0-63)
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the king can attack from the given position
+</ResponseField>
+
+---
+
+### knightAttacks
+
+Gets all squares attacked or defended by a knight on a given square.
+
+```typescript
+import { knightAttacks } from 'chessops/attacks';
+
+const attacks = knightAttacks(27); // e4
+console.log(attacks.has(42)); // true (g5)
+console.log(attacks.has(12)); // true (c3)
+```
+
+<ParamField path="square" type="Square" required>
+  The square where the knight is located (0-63)
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the knight can attack from the given position
+</ResponseField>
+
+---
+
+### pawnAttacks
+
+Gets all squares attacked or defended by a pawn of the given color on a given square.
+
+```typescript
+import { pawnAttacks } from 'chessops/attacks';
+
+const whiteAttacks = pawnAttacks('white', 27); // e4
+console.log(whiteAttacks.has(34)); // true (d5)
+console.log(whiteAttacks.has(36)); // true (f5)
+
+const blackAttacks = pawnAttacks('black', 27); // e4
+console.log(blackAttacks.has(18)); // true (d3)
+console.log(blackAttacks.has(20)); // true (f3)
+```
+
+<ParamField path="color" type="Color" required>
+  The color of the pawn ('white' or 'black')
+</ParamField>
+
+<ParamField path="square" type="Square" required>
+  The square where the pawn is located (0-63)
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the pawn can attack from the given position
+</ResponseField>
+
+---
+
+### bishopAttacks
+
+Gets all squares attacked or defended by a bishop on a given square, considering occupied squares.
+
+```typescript
+import { bishopAttacks } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+const occupied = SquareSet.fromSquares([19, 36]); // d3 and e5
+const attacks = bishopAttacks(27, occupied); // e4
+console.log(attacks.has(36)); // true (e5, can attack)
+console.log(attacks.has(45)); // false (f6, blocked by e5)
+```
+
+<ParamField path="square" type="Square" required>
+  The square where the bishop is located (0-63)
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  A SquareSet representing all occupied squares on the board
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the bishop can attack, including the blocking piece but not beyond it
+</ResponseField>
+
+---
+
+### rookAttacks
+
+Gets all squares attacked or defended by a rook on a given square, considering occupied squares.
+
+```typescript
+import { rookAttacks } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+const occupied = SquareSet.fromSquares([26, 35]); // e3 and d5
+const attacks = rookAttacks(27, occupied); // e4
+console.log(attacks.has(26)); // true (e3)
+console.log(attacks.has(18)); // false (e2, blocked by e3)
+```
+
+<ParamField path="square" type="Square" required>
+  The square where the rook is located (0-63)
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  A SquareSet representing all occupied squares on the board
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the rook can attack
+</ResponseField>
+
+---
+
+### queenAttacks
+
+Gets all squares attacked or defended by a queen on a given square, considering occupied squares.
+
+```typescript
+import { queenAttacks } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+const occupied = SquareSet.fromSquares([26, 36]);
+const attacks = queenAttacks(27, occupied); // e4
+// Combines rook and bishop attacks
+```
+
+<ParamField path="square" type="Square" required>
+  The square where the queen is located (0-63)
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  A SquareSet representing all occupied squares on the board
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the queen can attack (combination of rook and bishop attacks)
+</ResponseField>
+
+---
+
+### attacks
+
+Gets all squares attacked or defended by any piece on a given square, considering occupied squares.
+
+```typescript
+import { attacks } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+const piece = { role: 'knight', color: 'white' };
+const occupied = SquareSet.fromSquares([...]);
+const attacked = attacks(piece, 27, occupied);
+```
+
+<ParamField path="piece" type="Piece" required>
+  The piece (contains role and color)
+</ParamField>
+
+<ParamField path="square" type="Square" required>
+  The square where the piece is located (0-63)
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  A SquareSet representing all occupied squares on the board
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares the piece can attack
+</ResponseField>
+
+## Geometric Functions
+
+### ray
+
+Gets all squares on the rank, file, or diagonal connecting two squares.
+
+```typescript
+import { ray } from 'chessops/attacks';
+
+const r = ray(0, 63); // a1 to h8 (diagonal)
+console.log(r.size()); // 8 (all squares on the diagonal)
+
+const fileRay = ray(0, 56); // a1 to a8 (file)
+const rankRay = ray(0, 7); // a1 to h1 (rank)
+
+const noRay = ray(0, 9); // Not aligned
+console.log(noRay.isEmpty()); // true
+```
+
+<ParamField path="a" type="Square" required>
+  First square (0-63)
+</ParamField>
+
+<ParamField path="b" type="Square" required>
+  Second square (0-63)
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares on the rank, file, or diagonal connecting the two squares, including both endpoints. Returns an empty set if the squares are not aligned.
+</ResponseField>
+
+---
+
+### between
+
+Gets all squares between two squares (bounds not included).
+
+```typescript
+import { between } from 'chessops/attacks';
+
+const b = between(0, 63); // a1 to h8
+console.log(b.size()); // 6 (b2, c3, d4, e5, f6, g7)
+
+const fileBetween = between(0, 16); // a1 to a3
+console.log(fileBetween.has(8)); // true (a2)
+console.log(fileBetween.has(0)); // false (a1 not included)
+
+const notAligned = between(0, 9);
+console.log(notAligned.isEmpty()); // true
+```
+
+<ParamField path="a" type="Square" required>
+  First square (0-63)
+</ParamField>
+
+<ParamField path="b" type="Square" required>
+  Second square (0-63)
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A SquareSet containing all squares between the two squares, excluding both endpoints. Returns an empty set if the squares are not on the same rank, file, or diagonal.
+</ResponseField>
+
+## Usage Examples
+
+### Checking if a Square is Under Attack
+
+```typescript
+import { attacks } from 'chessops/attacks';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const occupied = pos.board.occupied;
+
+// Check if e4 is attacked by any white piece
+let isAttacked = false;
+for (const square of pos.board.white) {
+  const piece = pos.board.get(square);
+  if (piece && attacks(piece, square, occupied).has(27)) { // 27 = e4
+    isAttacked = true;
+    break;
+  }
+}
+```
+
+### Computing X-Ray Attacks
+
+```typescript
+import { bishopAttacks, between } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+const bishop = 0; // a1
+const king = 63; // h8
+const occupied = SquareSet.fromSquares([27]); // e4 blocks the diagonal
+
+// Remove the blocker to see x-ray attacks
+const withoutBlocker = occupied.without(27);
+const xrayAttacks = bishopAttacks(bishop, withoutBlocker);
+
+if (xrayAttacks.has(king)) {
+  console.log('King is on the diagonal and would be attacked if e4 moves');
+}
+```
+
+### Finding Pinned Pieces
+
+```typescript
+import { between, ray } from 'chessops/attacks';
+import { SquareSet } from 'chessops';
+
+function isPinned(
+  piece: number,
+  king: number,
+  attacker: number,
+  occupied: SquareSet
+): boolean {
+  const r = ray(king, attacker);
+  if (!r.has(piece)) return false;
+  
+  const bet = between(king, attacker);
+  const blockers = bet.intersect(occupied);
+  
+  // Pinned if this piece is the only blocker
+  return blockers.size() === 1 && blockers.has(piece);
+}
+```

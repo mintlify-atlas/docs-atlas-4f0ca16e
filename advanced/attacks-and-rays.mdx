@@ -1,0 +1,294 @@
+---
+title: 'Attacks and Rays'
+description: 'Attack calculation, ray generation, and the Hyperbola Quintessence algorithm'
+icon: 'chess-rook'
+---
+
+## Overview
+
+The `attacks` module provides low-level functions for computing piece attacks and rays on a chessboard. These functions are the foundation for implementing chess rules, move generation, and board analysis.
+
+<Tip>
+Sliding attacks use [Hyperbola Quintessence](https://www.chessprogramming.org/Hyperbola_Quintessence) rather than Magic Bitboards. While Magic Bitboards offer slightly faster lookups, Hyperbola Quintessence requires significantly smaller attack tables and faster initialization - critical for web applications.
+</Tip>
+
+## Non-Sliding Piece Attacks
+
+Non-sliding pieces (king, knight, pawn) have pre-computed attack tables for optimal performance.
+
+### King Attacks
+
+```typescript
+kingAttacks(square: Square): SquareSet
+```
+
+Returns all squares attacked or defended by a king on the given square.
+
+```typescript
+import { kingAttacks } from 'chessops/attacks';
+import { makeSquare } from 'chessops/util';
+
+const e4 = makeSquare('e4');
+const attacks = kingAttacks(e4);
+// Returns SquareSet containing: d3, d4, d5, e3, e5, f3, f4, f5
+```
+
+### Knight Attacks
+
+```typescript
+knightAttacks(square: Square): SquareSet
+```
+
+Returns all squares attacked or defended by a knight on the given square.
+
+```typescript
+import { knightAttacks } from 'chessops/attacks';
+
+const d4 = makeSquare('d4');
+const attacks = knightAttacks(d4);
+// Returns SquareSet containing: b3, b5, c2, c6, e2, e6, f3, f5
+```
+
+### Pawn Attacks
+
+```typescript
+pawnAttacks(color: Color, square: Square): SquareSet
+```
+
+Returns all squares attacked or defended by a pawn of the given color.
+
+```typescript
+import { pawnAttacks } from 'chessops/attacks';
+
+const e4 = makeSquare('e4');
+const whiteAttacks = pawnAttacks('white', e4);
+// Returns SquareSet containing: d5, f5
+
+const blackAttacks = pawnAttacks('black', e4);
+// Returns SquareSet containing: d3, f3
+```
+
+<Note>
+Pawn attacks only include diagonal captures, not forward moves. Use move generation functions for all legal pawn moves.
+</Note>
+
+## Sliding Piece Attacks
+
+Sliding pieces (bishop, rook, queen) require occupied squares to determine where attacks stop.
+
+### Bishop Attacks
+
+```typescript
+bishopAttacks(square: Square, occupied: SquareSet): SquareSet
+```
+
+Returns all squares attacked by a bishop, considering occupied squares.
+
+```typescript
+import { bishopAttacks } from 'chessops/attacks';
+import { SquareSet } from 'chessops/squareSet';
+
+const d4 = makeSquare('d4');
+const occupied = SquareSet.fromSquare(makeSquare('f6'));
+const attacks = bishopAttacks(d4, occupied);
+// Bishop attacks along diagonals, stopping at f6
+```
+
+### Rook Attacks
+
+```typescript
+rookAttacks(square: Square, occupied: SquareSet): SquareSet
+```
+
+Returns all squares attacked by a rook along ranks and files.
+
+```typescript
+import { rookAttacks } from 'chessops/attacks';
+
+const d4 = makeSquare('d4');
+const occupied = SquareSet.fromSquare(makeSquare('d7'));
+const attacks = rookAttacks(d4, occupied);
+// Rook attacks along d-file and 4th rank, stopping at d7 vertically
+```
+
+### Queen Attacks
+
+```typescript
+queenAttacks(square: Square, occupied: SquareSet): SquareSet
+```
+
+Combines bishop and rook attacks for queen movement.
+
+```typescript
+import { queenAttacks } from 'chessops/attacks';
+
+const attacks = queenAttacks(square, occupied);
+// Equivalent to: bishopAttacks(square, occupied).xor(rookAttacks(square, occupied))
+```
+
+## Generic Attack Function
+
+```typescript
+attacks(piece: Piece, square: Square, occupied: SquareSet): SquareSet
+```
+
+A unified interface that dispatches to the appropriate attack function based on piece role.
+
+```typescript
+import { attacks } from 'chessops/attacks';
+
+const piece = { role: 'queen', color: 'white' };
+const square = makeSquare('d4');
+const attackSquares = attacks(piece, square, occupied);
+```
+
+## Rays and Between
+
+Rays represent all squares along a rank, file, or diagonal connecting two squares.
+
+### Ray Function
+
+```typescript
+ray(a: Square, b: Square): SquareSet
+```
+
+Returns all squares on the line connecting squares `a` and `b`, including both endpoints. Returns an empty set if the squares are not aligned.
+
+```typescript
+import { ray } from 'chessops/attacks';
+
+const a1 = makeSquare('a1');
+const h8 = makeSquare('h8');
+const diagonal = ray(a1, h8);
+// Returns SquareSet: a1, b2, c3, d4, e5, f6, g7, h8
+
+const e4 = makeSquare('e4');
+const e8 = makeSquare('e8');
+const file = ray(e4, e8);
+// Returns SquareSet: e1, e2, e3, e4, e5, e6, e7, e8
+```
+
+### Between Function
+
+```typescript
+between(a: Square, b: Square): SquareSet
+```
+
+Returns all squares strictly between `a` and `b`, excluding the endpoints. Returns an empty set if the squares are not aligned or adjacent.
+
+```typescript
+import { between } from 'chessops/attacks';
+
+const a1 = makeSquare('a1');
+const h8 = makeSquare('h8');
+const squares = between(a1, h8);
+// Returns SquareSet: b2, c3, d4, e5, f6, g7
+
+const e1 = makeSquare('e1');
+const e2 = makeSquare('e2');
+const adjacent = between(e1, e2);
+// Returns empty SquareSet (no squares between adjacent squares)
+```
+
+## Hyperbola Quintessence Algorithm
+
+The implementation uses Hyperbola Quintessence for computing sliding attacks:
+
+```typescript
+const hyperbola = (bit: SquareSet, range: SquareSet, occupied: SquareSet): SquareSet => {
+  let forward = occupied.intersect(range);
+  let reverse = forward.bswap64(); // Byte swap for reverse direction
+  forward = forward.minus64(bit);
+  reverse = reverse.minus64(bit.bswap64());
+  return forward.xor(reverse.bswap64()).intersect(range);
+};
+```
+
+### How It Works
+
+1. **Isolate relevant occupancy**: Intersect occupied squares with the piece's range (rank, file, or diagonal)
+2. **Forward direction**: Subtract the piece's bit position to get all squares ahead
+3. **Reverse direction**: Byte-swap, subtract, and swap back for squares behind
+4. **Combine**: XOR both directions and mask with the original range
+
+<Tip>
+This algorithm is particularly efficient on modern JavaScript engines because it uses only bitwise operations without table lookups. Initialization time is nearly zero compared to Magic Bitboards.
+</Tip>
+
+## Performance Characteristics
+
+- **Non-sliding pieces**: O(1) lookup from pre-computed tables
+- **Sliding pieces**: O(1) with constant-time bitwise operations
+- **Memory usage**: ~4KB for all pre-computed tables (vs. hundreds of KB for Magic Bitboards)
+- **Initialization**: Instant (tables computed at module load time)
+
+## Use Cases
+
+### Check Detection
+
+```typescript
+import { attacks } from 'chessops/attacks';
+
+function isSquareAttacked(
+  square: Square,
+  attacker: Color,
+  board: Board
+): boolean {
+  for (const attackerSquare of board[attacker]) {
+    const piece = board.get(attackerSquare);
+    if (piece && attacks(piece, attackerSquare, board.occupied).has(square)) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+### Pin Detection
+
+```typescript
+import { between, ray } from 'chessops/attacks';
+
+function isPinned(
+  piece: Square,
+  king: Square,
+  board: Board
+): boolean {
+  const squares = between(piece, king);
+  if (squares.isEmpty()) return false;
+  
+  const raySquares = ray(piece, king);
+  // Check if any enemy sliding piece is on the same ray beyond the piece
+  // Implementation details omitted for brevity
+  return false; // Simplified
+}
+```
+
+### X-Ray Attacks
+
+Use `ray()` and `between()` to find pieces that could attack through another piece:
+
+```typescript
+import { ray, between } from 'chessops/attacks';
+
+const pinner = makeSquare('a1');
+const pinned = makeSquare('d4');
+const king = makeSquare('h8');
+
+if (ray(pinner, king).has(pinned)) {
+  const squaresBetween = between(pinner, pinned);
+  if (squaresBetween.isEmpty()) {
+    // Pinned piece is directly between attacker and king
+  }
+}
+```
+
+<Tip>
+For complex board analysis, combine attack functions with SquareSet operations like `intersect()`, `union()`, and `diff()` for optimal performance.
+</Tip>
+
+## Related
+
+- [SquareSet](/api/square-set) - Bitboard operations
+- [Board](/api/board) - Board representation
+- [Move Generation](/examples/move-generation) - Using attacks for legal moves

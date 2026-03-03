@@ -1,0 +1,547 @@
+---
+title: Game Rules and Validation
+description: Chess rule implementation, move validation, check/checkmate detection, and game outcomes
+---
+
+Chessops provides comprehensive chess rule validation, including legal move generation, check detection, checkmate and stalemate detection, and game outcome determination.
+
+## Position Validation
+
+### Illegal Setup Reasons
+
+When creating a position from a Setup, various validation errors can occur:
+
+```typescript
+export enum IllegalSetup {
+  Empty = 'ERR_EMPTY',
+  OppositeCheck = 'ERR_OPPOSITE_CHECK',
+  PawnsOnBackrank = 'ERR_PAWNS_ON_BACKRANK',
+  Kings = 'ERR_KINGS',
+  Variant = 'ERR_VARIANT',
+}
+```
+
+**Example:**
+
+```typescript
+import { Chess, IllegalSetup } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+// Invalid: pawns on back rank
+const setup1 = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/PNBQKBNR w KQkq - 0 1').unwrap();
+const result1 = Chess.fromSetup(setup1);
+if (result1.isErr) {
+  console.log(result1.error.message);  // IllegalSetup.PawnsOnBackrank
+}
+
+// Invalid: missing king
+const setup2 = parseFen('rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const result2 = Chess.fromSetup(setup2);
+if (result2.isErr) {
+  console.log(result2.error.message);  // IllegalSetup.Kings
+}
+```
+
+## Position Context
+
+The `ctx()` method computes important tactical information:
+
+```typescript
+export interface Context {
+  king: Square | undefined;
+  blockers: SquareSet;
+  checkers: SquareSet;
+  variantEnd: boolean;
+  mustCapture: boolean;
+}
+```
+
+<ParamField path="king" type="Square | undefined">
+  The square of the king of the side to move
+</ParamField>
+
+<ParamField path="blockers" type="SquareSet">
+  Pieces that are pinned to the king (blocking a potential check)
+</ParamField>
+
+<ParamField path="checkers" type="SquareSet">
+  Pieces giving check to the king
+</ParamField>
+
+<ParamField path="variantEnd" type="boolean">
+  Whether a variant-specific end condition is met
+</ParamField>
+
+<ParamField path="mustCapture" type="boolean">
+  Whether all legal moves must be captures (antichess variant)
+</ParamField>
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const ctx = pos.ctx();
+console.log(ctx.checkers.nonEmpty());  // true (black king is in check)
+console.log(ctx.checkers.size());      // 1 (one checking piece)
+```
+
+## Check and Checkmate
+
+### isCheck
+
+Determine if the side to move is in check:
+
+```typescript
+isCheck(): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnb1kbnr/pppp1ppp/8/4p3/5PPq/8/PPPPP2P/RNBQKBNR w KQkq - 1 3').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isCheck());  // true
+```
+
+### isCheckmate
+
+Determine if the position is checkmate:
+
+```typescript
+isCheckmate(ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+// Fool's mate
+const setup = parseFen('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isCheckmate());  // true
+```
+
+### isStalemate
+
+Determine if the position is stalemate:
+
+```typescript
+isStalemate(ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('k7/8/8/8/8/8/1Q6/K7 b - - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isStalemate());  // true
+```
+
+## Game Outcomes
+
+### outcome
+
+Get the outcome of the game:
+
+```typescript
+outcome(ctx?: Context): Outcome | undefined
+```
+
+Returns:
+- `{ winner: 'white' }` if white wins
+- `{ winner: 'black' }` if black wins
+- `{ winner: undefined }` for a draw
+- `undefined` if the game is ongoing
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+function describeOutcome(pos: Chess): string {
+  const outcome = pos.outcome();
+  
+  if (!outcome) {
+    return 'Game in progress';
+  }
+  
+  if (outcome.winner) {
+    return `${outcome.winner} wins`;
+  }
+  
+  if (pos.isStalemate()) {
+    return 'Draw by stalemate';
+  }
+  
+  if (pos.isInsufficientMaterial()) {
+    return 'Draw by insufficient material';
+  }
+  
+  return 'Draw';
+}
+
+// Checkmate
+const mate = parseFen('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3').unwrap();
+const pos1 = Chess.fromSetup(mate).unwrap();
+console.log(describeOutcome(pos1));  // 'black wins'
+
+// Stalemate
+const stalemate = parseFen('k7/8/8/8/8/8/1Q6/K7 b - - 0 1').unwrap();
+const pos2 = Chess.fromSetup(stalemate).unwrap();
+console.log(describeOutcome(pos2));  // 'Draw by stalemate'
+```
+
+### isEnd
+
+Check if the game has ended:
+
+```typescript
+isEnd(ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+
+const pos = Chess.default();
+
+while (!pos.isEnd()) {
+  const moves = getAllLegalMoves(pos);
+  if (moves.length === 0) break;
+  
+  const randomMove = parseUci(moves[Math.floor(Math.random() * moves.length)])!;
+  pos.play(randomMove);
+}
+
+console.log('Game ended');
+const outcome = pos.outcome();
+if (outcome?.winner) {
+  console.log(`Winner: ${outcome.winner}`);
+} else {
+  console.log('Draw');
+}
+```
+
+## Insufficient Material
+
+### isInsufficientMaterial
+
+Check if both sides have insufficient material to checkmate:
+
+```typescript
+isInsufficientMaterial(): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+// King vs King
+const setup1 = parseFen('4k3/8/8/8/8/8/8/4K3 w - - 0 1').unwrap();
+const pos1 = Chess.fromSetup(setup1).unwrap();
+console.log(pos1.isInsufficientMaterial());  // true
+
+// King + Knight vs King
+const setup2 = parseFen('4k3/8/8/8/8/8/8/4K2N w - - 0 1').unwrap();
+const pos2 = Chess.fromSetup(setup2).unwrap();
+console.log(pos2.isInsufficientMaterial());  // true
+
+// King + Bishop vs King + Bishop (same color)
+const setup3 = parseFen('4k1b1/8/8/8/8/8/8/4K1B1 w - - 0 1').unwrap();
+const pos3 = Chess.fromSetup(setup3).unwrap();
+console.log(pos3.isInsufficientMaterial());  // true if bishops are same color
+```
+
+### hasInsufficientMaterial
+
+Check if a specific side has insufficient material:
+
+```typescript
+hasInsufficientMaterial(color: Color): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.hasInsufficientMaterial('white'));  // false (has pawn)
+console.log(pos.hasInsufficientMaterial('black'));  // true (only king)
+```
+
+## Move Legality
+
+### isLegal
+
+Check if a move is legal in the current position:
+
+```typescript
+isLegal(move: Move, ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+
+const pos = Chess.default();
+
+console.log(pos.isLegal(parseUci('e2e4')!));   // true
+console.log(pos.isLegal(parseUci('e2e5')!));   // false (illegal)
+console.log(pos.isLegal(parseUci('e1e2')!));   // false (illegal)
+```
+
+### hasDests
+
+Check if the side to move has any legal moves:
+
+```typescript
+hasDests(ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const pos = Chess.default();
+console.log(pos.hasDests());  // true
+
+// Checkmate position
+const mate = parseFen('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3').unwrap();
+const matePos = Chess.fromSetup(mate).unwrap();
+console.log(matePos.hasDests());  // false
+```
+
+## Legal Move Generation
+
+### dests
+
+Get all legal destination squares for a piece:
+
+```typescript
+dests(square: Square, ctx?: Context): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare, makeSquare } from 'chessops';
+
+const pos = Chess.default();
+const e2Dests = pos.dests(parseSquare('e2')!);
+
+for (const dest of e2Dests) {
+  console.log(makeSquare(dest));  // e3, e4
+}
+```
+
+### allDests
+
+Get all legal moves for the side to move:
+
+```typescript
+allDests(ctx?: Context): Map<Square, SquareSet>
+```
+
+**Example:**
+
+```typescript
+import { Chess, makeSquare, makeUci } from 'chessops';
+
+function countLegalMoves(pos: Chess): number {
+  let count = 0;
+  const dests = pos.allDests();
+  
+  for (const [from, toSquares] of dests) {
+    for (const to of toSquares) {
+      // Account for promotions
+      if (pos.board.pawn.has(from) && (to >= 56 || to <= 7)) {
+        count += 4;  // Q, R, B, N
+      } else {
+        count += 1;
+      }
+    }
+  }
+  
+  return count;
+}
+
+const pos = Chess.default();
+console.log(countLegalMoves(pos));  // 20
+```
+
+## Attacks and Defenders
+
+### kingAttackers
+
+Find all pieces attacking a square:
+
+```typescript
+kingAttackers(square: Square, attacker: Color, occupied: SquareSet): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const e5 = parseSquare('e5')!;
+const attackers = pos.kingAttackers(e5, 'white', pos.board.occupied);
+console.log(attackers.size());  // Number of white pieces attacking e5
+```
+
+## Castling Rules
+
+### Castles Class
+
+Manages castling rights and paths:
+
+```typescript
+export class Castles {
+  castlingRights: SquareSet;  // Squares of rooks that can castle
+  rook: ByColor<ByCastlingSide<Square | undefined>>;
+  path: ByColor<ByCastlingSide<SquareSet>>;
+}
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.castles.rook.white.h);  // 7 (h1 rook)
+console.log(pos.castles.rook.white.a);  // 0 (a1 rook)
+
+// After moving the king, castling rights are lost
+pos.play({ from: parseSquare('e1')!, to: parseSquare('e2')! });
+console.log(pos.castles.rook.white.h);  // undefined
+```
+
+## Practical Examples
+
+### Detecting Checkmate or Stalemate
+
+```typescript
+import { Chess } from 'chessops';
+
+function analyzePosition(pos: Chess): string {
+  if (pos.isCheckmate()) {
+    const winner = pos.turn === 'white' ? 'black' : 'white';
+    return `Checkmate! ${winner} wins.`;
+  }
+  
+  if (pos.isStalemate()) {
+    return 'Stalemate! Game is drawn.';
+  }
+  
+  if (pos.isInsufficientMaterial()) {
+    return 'Insufficient material. Game is drawn.';
+  }
+  
+  if (pos.isCheck()) {
+    return `${pos.turn} is in check.`;
+  }
+  
+  return `${pos.turn} to move.`;
+}
+
+const pos = Chess.default();
+console.log(analyzePosition(pos));  // 'white to move.'
+```
+
+### Validating and Making Moves Safely
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+
+function tryMove(pos: Chess, uci: string): { success: boolean; message: string } {
+  const move = parseUci(uci);
+  
+  if (!move) {
+    return { success: false, message: 'Invalid move format' };
+  }
+  
+  if (!pos.isLegal(move)) {
+    return { success: false, message: 'Illegal move' };
+  }
+  
+  pos.play(move);
+  
+  if (pos.isCheckmate()) {
+    return { success: true, message: 'Checkmate!' };
+  }
+  
+  if (pos.isCheck()) {
+    return { success: true, message: 'Check' };
+  }
+  
+  return { success: true, message: 'Move made' };
+}
+
+const pos = Chess.default();
+const result = tryMove(pos, 'e2e4');
+console.log(result);  // { success: true, message: 'Move made' }
+```
+
+### Finding All Checks
+
+```typescript
+import { Chess, makeUci } from 'chessops';
+
+function findAllChecks(pos: Chess): string[] {
+  const checks: string[] = [];
+  const dests = pos.allDests();
+  
+  for (const [from, toSquares] of dests) {
+    for (const to of toSquares) {
+      const clone = pos.clone();
+      const move = { from, to };
+      clone.play(move);
+      
+      if (clone.isCheck()) {
+        checks.push(makeUci(move));
+      }
+    }
+  }
+  
+  return checks;
+}
+
+const pos = Chess.default();
+const checks = findAllChecks(pos);
+console.log(checks);  // All moves that give check
+```

@@ -1,0 +1,492 @@
+---
+title: Move Representation
+description: Working with moves, move parsing, UCI notation, and move execution
+---
+
+Chessops provides comprehensive support for representing and manipulating chess moves, including normal moves, promotions, drops, and castling.
+
+## Move Types
+
+### NormalMove
+
+A standard move from one square to another:
+
+```typescript
+export interface NormalMove {
+  from: Square;
+  to: Square;
+  promotion?: Role;
+}
+```
+
+**Examples:**
+
+```typescript
+import { NormalMove, parseSquare } from 'chessops';
+
+// Pawn advance e2-e4
+const pawnMove: NormalMove = {
+  from: parseSquare('e2')!,
+  to: parseSquare('e4')!
+};
+
+// Knight move
+const knightMove: NormalMove = {
+  from: parseSquare('g1')!,
+  to: parseSquare('f3')!
+};
+
+// Pawn promotion to queen
+const promotion: NormalMove = {
+  from: parseSquare('e7')!,
+  to: parseSquare('e8')!,
+  promotion: 'queen'
+};
+
+// Castling is represented as a king move
+const castling: NormalMove = {
+  from: parseSquare('e1')!,
+  to: parseSquare('g1')!  // Kingside castling
+};
+```
+
+### DropMove
+
+A piece drop for variants like Crazyhouse:
+
+```typescript
+export interface DropMove {
+  role: Role;
+  to: Square;
+}
+```
+
+**Example:**
+
+```typescript
+import { DropMove, parseSquare } from 'chessops';
+
+// Drop a knight on f3
+const drop: DropMove = {
+  role: 'knight',
+  to: parseSquare('f3')!
+};
+```
+
+### Move Union Type
+
+The `Move` type represents either a normal move or a drop:
+
+```typescript
+export type Move = NormalMove | DropMove;
+```
+
+### Type Guards
+
+Use type guards to distinguish between move types:
+
+```typescript
+export const isDrop = (v: Move): v is DropMove => 'role' in v;
+export const isNormal = (v: Move): v is NormalMove => 'from' in v;
+```
+
+**Example:**
+
+```typescript
+import { Move, isDrop, isNormal, makeUci } from 'chessops';
+
+function describeMove(move: Move): string {
+  if (isDrop(move)) {
+    return `Drop ${move.role} at ${makeSquare(move.to)}`;
+  } else if (isNormal(move)) {
+    const uci = makeUci(move);
+    if (move.promotion) {
+      return `${uci} (promotion to ${move.promotion})`;
+    }
+    return uci;
+  }
+  return 'Unknown move';
+}
+```
+
+## UCI Notation
+
+### parseUci
+
+Parse a move from UCI notation:
+
+```typescript
+export const parseUci = (str: string): Move | undefined
+```
+
+**Formats:**
+- Normal moves: `e2e4`, `g1f3`
+- Promotions: `e7e8q`, `a7a8n`
+- Drops (Crazyhouse): `Q@f7`, `N@e5`
+- Castling: `e1g1` (kingside), `e1c1` (queenside)
+
+**Example:**
+
+```typescript
+import { parseUci } from 'chessops';
+
+const move1 = parseUci('e2e4');
+console.log(move1);  // { from: 12, to: 28 }
+
+const move2 = parseUci('e7e8q');
+console.log(move2);  // { from: 52, to: 60, promotion: 'queen' }
+
+const move3 = parseUci('N@f3');
+console.log(move3);  // { role: 'knight', to: 21 }
+
+const invalid = parseUci('invalid');
+console.log(invalid);  // undefined
+```
+
+### makeUci
+
+Convert a move to UCI notation:
+
+```typescript
+export const makeUci = (move: Move): string
+```
+
+**Example:**
+
+```typescript
+import { makeUci, parseSquare } from 'chessops';
+
+const move1 = { from: parseSquare('e2')!, to: parseSquare('e4')! };
+console.log(makeUci(move1));  // 'e2e4'
+
+const move2 = { 
+  from: parseSquare('e7')!, 
+  to: parseSquare('e8')!,
+  promotion: 'queen' as const
+};
+console.log(makeUci(move2));  // 'e7e8q'
+
+const drop = { role: 'knight' as const, to: parseSquare('f3')! };
+console.log(makeUci(drop));  // 'N@f3'
+```
+
+## Square Utilities
+
+### parseSquare
+
+Parse a square from algebraic notation:
+
+```typescript
+export function parseSquare(str: string): Square | undefined
+```
+
+**Example:**
+
+```typescript
+import { parseSquare } from 'chessops';
+
+const e4 = parseSquare('e4');
+console.log(e4);  // 28
+
+const a1 = parseSquare('a1');
+console.log(a1);  // 0
+
+const h8 = parseSquare('h8');
+console.log(h8);  // 63
+
+const invalid = parseSquare('z9');
+console.log(invalid);  // undefined
+```
+
+### makeSquare
+
+Convert a square number to algebraic notation:
+
+```typescript
+export const makeSquare = (square: Square): SquareName
+```
+
+**Example:**
+
+```typescript
+import { makeSquare } from 'chessops';
+
+console.log(makeSquare(0));   // 'a1'
+console.log(makeSquare(28));  // 'e4'
+console.log(makeSquare(63));  // 'h8'
+```
+
+### squareFile and squareRank
+
+Get the file or rank of a square:
+
+```typescript
+export const squareRank = (square: Square): number  // 0-7
+export const squareFile = (square: Square): number  // 0-7
+```
+
+**Example:**
+
+```typescript
+import { parseSquare, squareFile, squareRank, FILE_NAMES, RANK_NAMES } from 'chessops';
+
+const e4 = parseSquare('e4')!;
+console.log(FILE_NAMES[squareFile(e4)]);  // 'e'
+console.log(RANK_NAMES[squareRank(e4)]);  // '4'
+```
+
+## Move Comparison
+
+### moveEquals
+
+Compare two moves for equality:
+
+```typescript
+export const moveEquals = (left: Move, right: Move): boolean
+```
+
+**Example:**
+
+```typescript
+import { moveEquals, parseUci } from 'chessops';
+
+const move1 = parseUci('e2e4')!;
+const move2 = parseUci('e2e4')!;
+const move3 = parseUci('e2e3')!;
+
+console.log(moveEquals(move1, move2));  // true
+console.log(moveEquals(move1, move3));  // false
+```
+
+## Making Moves
+
+### play
+
+Execute a move on a position (mutates the position):
+
+```typescript
+play(move: Move): void
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+import { makeFen } from 'chessops/fen';
+
+const pos = Chess.default();
+
+// Make moves
+pos.play(parseUci('e2e4')!);
+pos.play(parseUci('e7e5')!);
+pos.play(parseUci('g1f3')!);
+
+console.log(makeFen(pos.toSetup()));
+// rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2
+```
+
+### Move Effects
+
+The `play()` method handles:
+- Moving pieces on the board
+- Capturing pieces
+- Pawn promotions
+- Castling (moving both king and rook)
+- En passant captures
+- Updating castling rights
+- Updating the en passant square
+- Incrementing halfmove and fullmove clocks
+- Switching the turn
+- Updating pockets (Crazyhouse)
+- Updating remaining checks (3check)
+
+**Example of pawn promotion:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('4k3/4P3/8/8/8/8/8/4K3 w - - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const promotion = { 
+  from: parseSquare('e7')!, 
+  to: parseSquare('e8')!,
+  promotion: 'queen' as const
+};
+
+pos.play(promotion);
+
+const piece = pos.board.get(parseSquare('e8')!);
+console.log(piece);  // { role: 'queen', color: 'white', promoted: false }
+```
+
+**Example of castling:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Kingside castling
+pos.play({ from: parseSquare('e1')!, to: parseSquare('g1')! });
+
+console.log(pos.board.has(parseSquare('g1')!));  // true (king)
+console.log(pos.board.has(parseSquare('f1')!));  // true (rook)
+console.log(pos.board.has(parseSquare('e1')!));  // false
+console.log(pos.board.has(parseSquare('h1')!));  // false
+```
+
+**Example of en passant:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// En passant capture
+pos.play({ from: parseSquare('e5')!, to: parseSquare('d6')! });
+
+console.log(pos.board.has(parseSquare('d6')!));  // true (capturing pawn)
+console.log(pos.board.has(parseSquare('d5')!));  // false (captured pawn)
+```
+
+## Castling Detection
+
+### castlingSide
+
+Detect if a move is castling:
+
+```typescript
+export const castlingSide = (pos: Position, move: Move): CastlingSide | undefined
+```
+
+**Example:**
+
+```typescript
+import { Chess, castlingSide, parseUci } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const kingsideCastle = parseUci('e1g1')!;
+const side = castlingSide(pos, kingsideCastle);
+console.log(side);  // 'h' (kingside)
+
+const queensideCastle = parseUci('e1c1')!;
+const side2 = castlingSide(pos, queensideCastle);
+console.log(side2);  // 'a' (queenside)
+```
+
+### normalizeMove
+
+Normalize a castling move to the actual rook destination:
+
+```typescript
+export const normalizeMove = (pos: Position, move: Move): Move
+```
+
+**Example:**
+
+```typescript
+import { Chess, normalizeMove, parseUci, makeUci } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Castling can be input as e1g1 or e1h1
+const move1 = parseUci('e1g1')!;
+const normalized = normalizeMove(pos, move1);
+console.log(makeUci(normalized));  // 'e1h1'
+```
+
+## Practical Examples
+
+### Playing a Sequence of Moves
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+import { makeFen } from 'chessops/fen';
+
+const pos = Chess.default();
+const moves = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'];
+
+for (const uci of moves) {
+  const move = parseUci(uci);
+  if (move && pos.isLegal(move)) {
+    pos.play(move);
+  } else {
+    console.error(`Illegal move: ${uci}`);
+    break;
+  }
+}
+
+console.log(makeFen(pos.toSetup()));
+// rnbqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3
+```
+
+### Validating User Input
+
+```typescript
+import { Chess, parseUci } from 'chessops';
+
+function makeMove(pos: Chess, uci: string): boolean {
+  const move = parseUci(uci);
+  if (!move) {
+    console.error('Invalid UCI format');
+    return false;
+  }
+  
+  if (!pos.isLegal(move)) {
+    console.error('Illegal move');
+    return false;
+  }
+  
+  pos.play(move);
+  return true;
+}
+
+const pos = Chess.default();
+makeMove(pos, 'e2e4');  // true
+makeMove(pos, 'e7e5');  // true
+makeMove(pos, 'e4e5');  // false (illegal)
+```
+
+### Finding All Legal Moves in UCI Format
+
+```typescript
+import { Chess, makeUci } from 'chessops';
+
+function getAllLegalMoves(pos: Chess): string[] {
+  const moves: string[] = [];
+  const dests = pos.allDests();
+  
+  for (const [from, squares] of dests) {
+    for (const to of squares) {
+      const move = { from, to };
+      
+      // Check for promotion
+      if (pos.board.pawn.has(from) && (to >= 56 || to <= 7)) {
+        for (const promotion of ['queen', 'rook', 'bishop', 'knight'] as const) {
+          moves.push(makeUci({ from, to, promotion }));
+        }
+      } else {
+        moves.push(makeUci(move));
+      }
+    }
+  }
+  
+  return moves;
+}
+
+const pos = Chess.default();
+const moves = getAllLegalMoves(pos);
+console.log(moves);
+// ['a2a3', 'a2a4', 'b2b3', 'b2b4', ...]
+```

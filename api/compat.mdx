@@ -1,0 +1,303 @@
+---
+title: Compat
+description: Compatibility utilities for chessground and other chess libraries
+---
+
+The compat module provides utilities for converting between chessops formats and those used by other chess libraries like [chessground](https://github.com/lichess-org/chessground) and [scalachess](https://github.com/lichess-org/scalachess).
+
+## Chessground Compatibility
+
+### chessgroundDests
+
+Converts legal moves to chessground's destination format.
+
+```typescript
+import { chessgroundDests } from 'chessops/compat';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const dests = chessgroundDests(pos);
+
+console.log(dests.get('e2')); // ['e3', 'e4']
+console.log(dests.get('g1')); // ['f3', 'h3']
+```
+
+<ParamField path="pos" type="Position" required>
+  The position to compute legal move destinations for
+</ParamField>
+
+<ParamField path="opts" type="ChessgroundDestsOpts">
+  Options:
+  - `chess960?: boolean` - If true, uses Chess960 castling notation (king captures rook)
+</ParamField>
+
+<ResponseField name="return" type="Map<SquareName, SquareName[]>">
+  Map from source square to array of destination squares. Includes both standard and Chess960 castling destinations unless `chess960: true` is specified.
+</ResponseField>
+
+<Note>
+By default, this function includes both types of castling destinations (king-to-rook and king-to-destination) so chessground's `rookCastles` option works correctly. Enable `chess960: true` to only include Chess960-style castling.
+</Note>
+
+---
+
+### chessgroundMove
+
+Converts a move to chessground's move format.
+
+```typescript
+import { chessgroundMove } from 'chessops/compat';
+
+const normalMove = { from: 12, to: 28 }; // e2-e4
+console.log(chessgroundMove(normalMove)); // ['e2', 'e4']
+
+const drop = { role: 'queen', to: 39 }; // Q@h5
+console.log(chessgroundMove(drop)); // ['h5']
+```
+
+<ParamField path="move" type="Move" required>
+  The move to convert
+</ParamField>
+
+<ResponseField name="return" type="SquareName[]">
+  Array with [from, to] for normal moves, or [to] for drops
+</ResponseField>
+
+## Scalachess Compatibility
+
+### scalachessCharPair
+
+Converts a move to scalachess's binary char-pair format.
+
+```typescript
+import { scalachessCharPair } from 'chessops/compat';
+
+const move = { from: 12, to: 28 }; // e2-e4
+console.log(scalachessCharPair(move)); // Two-character string
+
+// Promotion
+const promotion = { from: 48, to: 56, promotion: 'queen' }; // a7-a8=Q
+console.log(scalachessCharPair(promotion));
+
+// Drop
+const drop = { role: 'queen', to: 39 }; // Q@h5
+console.log(scalachessCharPair(drop));
+```
+
+<ParamField path="move" type="Move" required>
+  The move to encode
+</ParamField>
+
+<ResponseField name="return" type="string">
+  Two-character string encoding the move in scalachess format
+</ResponseField>
+
+<Note>
+This encoding is used by Lichess and scalachess for compact binary move representation. The format encodes source square, destination square, and promotion piece (if any) in just two characters.
+</Note>
+
+## Variant Conversion
+
+### lichessRules
+
+Converts Lichess variant names to chessops Rules.
+
+```typescript
+import { lichessRules } from 'chessops/compat';
+
+console.log(lichessRules('standard')); // 'chess'
+console.log(lichessRules('chess960')); // 'chess'
+console.log(lichessRules('kingOfTheHill')); // 'kingofthehill'
+console.log(lichessRules('threeCheck')); // '3check'
+console.log(lichessRules('crazyhouse')); // 'crazyhouse'
+console.log(lichessRules('atomic')); // 'atomic'
+console.log(lichessRules('horde')); // 'horde'
+console.log(lichessRules('racingKings')); // 'racingkings'
+console.log(lichessRules('antichess')); // 'antichess'
+```
+
+<ParamField path="variant" type="LichessVariant" required>
+  Lichess variant name: 'standard' | 'chess960' | 'antichess' | 'fromPosition' | 'kingOfTheHill' | 'threeCheck' | 'atomic' | 'horde' | 'racingKings' | 'crazyhouse'
+</ParamField>
+
+<ResponseField name="return" type="Rules">
+  The corresponding chessops Rules type
+</ResponseField>
+
+---
+
+### lichessVariant
+
+Converts chessops Rules to Lichess variant names.
+
+```typescript
+import { lichessVariant } from 'chessops/compat';
+
+console.log(lichessVariant('chess')); // 'standard'
+console.log(lichessVariant('kingofthehill')); // 'kingOfTheHill'
+console.log(lichessVariant('3check')); // 'threeCheck'
+console.log(lichessVariant('crazyhouse')); // 'crazyhouse'
+console.log(lichessVariant('atomic')); // 'atomic'
+console.log(lichessVariant('horde')); // 'horde'
+console.log(lichessVariant('racingkings')); // 'racingKings'
+console.log(lichessVariant('antichess')); // 'antichess'
+```
+
+<ParamField path="rules" type="Rules" required>
+  The chessops Rules type
+</ParamField>
+
+<ResponseField name="return" type="LichessVariant">
+  The corresponding Lichess variant name
+</ResponseField>
+
+## Usage Examples
+
+### Integrating with Chessground
+
+```typescript
+import { chessgroundDests, chessgroundMove } from 'chessops/compat';
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+import { Chessground } from 'chessground';
+
+const pos = Chess.default();
+const cg = Chessground(document.getElementById('board')!, {
+  fen: pos.toSetup().board.fen,
+  turnColor: pos.turn,
+  movable: {
+    free: false,
+    dests: chessgroundDests(pos),
+  },
+});
+
+// Handle user moves
+cg.set({
+  movable: {
+    events: {
+      after: (orig, dest) => {
+        // Convert chessground move to SAN
+        const move = parseSan(pos, `${orig}${dest}`);
+        if (move) {
+          pos.play(move);
+          cg.set({
+            fen: pos.toSetup().board.fen,
+            turnColor: pos.turn,
+            movable: { dests: chessgroundDests(pos) },
+          });
+        }
+      },
+    },
+  },
+});
+```
+
+### Chess960 Support
+
+```typescript
+import { chessgroundDests } from 'chessops/compat';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Chess960 position
+const fen = 'rkbqnbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQNBNR w KQkq - 0 1';
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Enable chess960 mode for chessground
+const dests = chessgroundDests(pos, { chess960: true });
+
+// Configure chessground
+chessground.set({
+  fen,
+  movable: {
+    dests,
+  },
+  chess960: true,
+});
+```
+
+### Sending Moves to Server
+
+```typescript
+import { scalachessCharPair } from 'chessops/compat';
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const move = parseSan(pos, 'e4')!;
+
+// Encode move for transmission
+const encoded = scalachessCharPair(move);
+
+// Send to server (compact binary format)
+await fetch('/api/move', {
+  method: 'POST',
+  body: JSON.stringify({ move: encoded }),
+});
+```
+
+### Multi-Variant Support
+
+```typescript
+import { lichessRules, lichessVariant, chessgroundDests } from 'chessops/compat';
+import { defaultPosition } from 'chessops/variant';
+
+function initGame(variant: string) {
+  // Convert Lichess variant to chessops rules
+  const rules = lichessRules(variant as any);
+  
+  // Create position
+  const pos = defaultPosition(rules);
+  
+  // Setup chessground
+  return {
+    fen: pos.toSetup().board.fen,
+    dests: chessgroundDests(pos),
+    variant: lichessVariant(rules),
+  };
+}
+
+const game = initGame('threeCheck');
+console.log(game.variant); // 'threeCheck'
+```
+
+### Handling Drops in Crazyhouse
+
+```typescript
+import { chessgroundMove, chessgroundDests } from 'chessops/compat';
+import { Crazyhouse } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[Qq] w KQkq - 0 1').unwrap();
+const pos = Crazyhouse.fromSetup(setup).unwrap();
+
+// Get drop destinations for chessground
+const dests = chessgroundDests(pos);
+
+// Chessground uses pockets, represented as special squares
+// Q@h5 becomes a drop move
+const drop = { role: 'queen' as const, to: 39 }; // h5
+const cgMove = chessgroundMove(drop);
+console.log(cgMove); // ['h5'] (single element for drops)
+
+pos.play(drop);
+```
+
+### Converting Between Systems
+
+```typescript
+import { scalachessCharPair, chessgroundMove } from 'chessops/compat';
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const move = parseSan(pos, 'Nf3')!;
+
+// For different systems
+const forChessground = chessgroundMove(move);
+console.log(forChessground); // ['g1', 'f3']
+
+const forScalachess = scalachessCharPair(move);
+console.log(forScalachess.length); // 2 (compact binary)
+```

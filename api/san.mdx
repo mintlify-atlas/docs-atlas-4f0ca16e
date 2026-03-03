@@ -1,0 +1,343 @@
+---
+title: SAN
+description: Parse and generate Standard Algebraic Notation (SAN) for chess moves
+---
+
+The SAN module provides functions for parsing and generating moves in Standard Algebraic Notation, the standard notation used in chess literature and databases.
+
+## Generation Functions
+
+### makeSan
+
+Generates SAN notation for a move without mutating the position.
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseSquare } from 'chessops/util';
+
+const pos = Chess.default();
+const move = { from: parseSquare('e2')!, to: parseSquare('e4')! };
+
+const san = makeSan(pos, move);
+console.log(san); // 'e4'
+
+// Original position is unchanged
+console.log(pos.turn); // 'white'
+```
+
+<ParamField path="pos" type="Position" required>
+  The current position (will be cloned internally, not mutated)
+</ParamField>
+
+<ParamField path="move" type="Move" required>
+  The move to convert to SAN
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The SAN notation string (e.g., 'Nf3', 'exd5', 'O-O', 'e8=Q#')
+</ResponseField>
+
+---
+
+### makeSanAndPlay
+
+Generates SAN notation for a move and plays it on the position.
+
+```typescript
+import { makeSanAndPlay } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseSquare } from 'chessops/util';
+
+const pos = Chess.default();
+const move = { from: parseSquare('e2')!, to: parseSquare('e4')! };
+
+const san = makeSanAndPlay(pos, move);
+console.log(san); // 'e4'
+
+// Position is now mutated
+console.log(pos.turn); // 'black'
+```
+
+<ParamField path="pos" type="Position" required>
+  The current position (will be mutated)
+</ParamField>
+
+<ParamField path="move" type="Move" required>
+  The move to convert to SAN and play
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The SAN notation string with check/checkmate suffix (e.g., 'Nf3+', 'Qh7#')
+</ResponseField>
+
+<Note>
+This function mutates the position. Use `makeSan()` if you need to keep the position unchanged.
+</Note>
+
+---
+
+### makeSanVariation
+
+Generates SAN notation for a sequence of moves (variation).
+
+```typescript
+import { makeSanVariation } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseSquare } from 'chessops/util';
+
+const pos = Chess.default();
+const variation = [
+  { from: parseSquare('e2')!, to: parseSquare('e4')! },
+  { from: parseSquare('e7')!, to: parseSquare('e5')! },
+  { from: parseSquare('g1')!, to: parseSquare('f3')! },
+];
+
+const san = makeSanVariation(pos, variation);
+console.log(san); // '1. e4 e5 2. Nf3'
+```
+
+<ParamField path="pos" type="Position" required>
+  The starting position (will be cloned internally)
+</ParamField>
+
+<ParamField path="variation" type="Move[]" required>
+  Array of moves to convert to SAN
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The complete variation string with move numbers (e.g., '1. e4 e5 2. Nf3 Nc6')
+</ResponseField>
+
+## Parsing Function
+
+### parseSan
+
+Parses a SAN string into a move.
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+const move = parseSan(pos, 'e4');
+console.log(move); // { from: 12, to: 28 }
+
+const knightMove = parseSan(pos, 'Nf3');
+console.log(knightMove); // { from: 6, to: 21 }
+
+const invalid = parseSan(pos, 'Ke2'); // King can't move there
+console.log(invalid); // undefined
+```
+
+<ParamField path="pos" type="Position" required>
+  The current position to parse the move in
+</ParamField>
+
+<ParamField path="san" type="string" required>
+  The SAN string to parse. Supported formats:
+  - Piece moves: `Nf3`, `Bc4`, `Qh5`
+  - Pawn moves: `e4`, `d5`
+  - Captures: `exd5`, `Nxf7`, `Bxh7`
+  - Castling: `O-O` (kingside), `O-O-O` (queenside)
+  - Promotion: `e8=Q`, `exd8=N`
+  - Disambiguation: `Nbd2`, `R1a3`, `Qh4e1`
+  - Check/checkmate suffixes: `+`, `#` (optional, ignored)
+  - Drops (Crazyhouse): `Q@h5`, `@e4` (pawn drop)
+</ParamField>
+
+<ResponseField name="return" type="Move | undefined">
+  The parsed Move, or undefined if the SAN is invalid or illegal in the current position
+</ResponseField>
+
+## SAN Notation Details
+
+### Move Types
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+// Pawn moves (no piece prefix)
+parseSan(pos, 'e4');      // Pawn to e4
+parseSan(pos, 'exd5');    // Pawn captures on d5
+parseSan(pos, 'e8=Q');    // Pawn promotes to queen
+
+// Piece moves (with piece prefix)
+parseSan(pos, 'Nf3');     // Knight to f3
+parseSan(pos, 'Bb5');     // Bishop to b5
+parseSan(pos, 'Qh5');     // Queen to h5
+parseSan(pos, 'Ke2');     // King to e2
+
+// Castling
+parseSan(pos, 'O-O');     // Kingside castling
+parseSan(pos, 'O-O-O');   // Queenside castling
+```
+
+### Disambiguation
+
+When multiple pieces of the same type can move to the same square:
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Position with two knights that can reach d2
+const setup = parseFen('rnbqkb1r/pppppppp/5n2/8/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// File disambiguation (different files)
+parseSan(pos, 'Nbd2');    // Knight from b1 to d2
+parseSan(pos, 'Nfd2');    // Would be knight from f file
+
+// Rank disambiguation (different ranks)
+parseSan(pos, 'N1d2');    // Knight from rank 1
+
+// Full disambiguation (when needed)
+parseSan(pos, 'Nb1d2');   // Knight from b1 to d2 (fully specified)
+```
+
+### Capture Notation
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const move = { from: 28, to: 35 }; // e4 captures e5
+const san = makeSan(pos, move);
+console.log(san); // 'exe5'
+```
+
+### Promotion
+
+```typescript
+import { parseSan, makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('8/P7/8/8/8/8/8/K6k w - - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Parse promotion
+const queenPromo = parseSan(pos, 'a8=Q');
+console.log(queenPromo); // { from: 48, to: 56, promotion: 'queen' }
+
+const knightPromo = parseSan(pos, 'a8=N+');
+console.log(knightPromo); // { from: 48, to: 56, promotion: 'knight' }
+
+// Generate promotion SAN
+const move = { from: 48, to: 56, promotion: 'queen' as const };
+const san = makeSan(pos, move);
+console.log(san); // 'a8=Q'
+```
+
+### Crazyhouse Drops
+
+```typescript
+import { parseSan, makeSan } from 'chessops/san';
+import { Crazyhouse } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[Q] w KQkq - 0 1').unwrap();
+const pos = Crazyhouse.fromSetup(setup).unwrap();
+
+// Parse drop
+const drop = parseSan(pos, 'Q@h5');
+console.log(drop); // { role: 'queen', to: 39 }
+
+// Pawn drop (role can be omitted)
+const pawnDrop = parseSan(pos, '@e4');
+console.log(pawnDrop); // { role: 'pawn', to: 28 }
+```
+
+## Usage Examples
+
+### Converting Game Moves to SAN
+
+```typescript
+import { makeSanVariation } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const moves = [
+  { from: 12, to: 28 },  // e2-e4
+  { from: 52, to: 36 },  // e7-e5
+  { from: 6, to: 21 },   // Ng1-f3
+  { from: 57, to: 42 },  // Nb8-c6
+];
+
+const variation = makeSanVariation(pos, moves);
+console.log(variation); // '1. e4 e5 2. Nf3 Nc6'
+```
+
+### Parsing User Input
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+function handleUserMove(pos: Chess, userInput: string): boolean {
+  const move = parseSan(pos, userInput.trim());
+  
+  if (!move) {
+    console.log('Invalid move notation');
+    return false;
+  }
+  
+  pos.play(move);
+  return true;
+}
+
+const pos = Chess.default();
+handleUserMove(pos, 'e4');   // true
+handleUserMove(pos, 'e5');   // true
+handleUserMove(pos, 'Qh8');  // false (illegal)
+```
+
+### Building Move History
+
+```typescript
+import { makeSanAndPlay } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const history: string[] = [];
+
+const moves = [
+  { from: 12, to: 28 },
+  { from: 52, to: 36 },
+  { from: 6, to: 21 },
+];
+
+for (const move of moves) {
+  const san = makeSanAndPlay(pos, move);
+  history.push(san);
+}
+
+console.log(history); // ['e4', 'e5', 'Nf3']
+```
+
+### Validating SAN Input
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+function isValidSan(pos: Chess, san: string): boolean {
+  return parseSan(pos, san) !== undefined;
+}
+
+const pos = Chess.default();
+console.log(isValidSan(pos, 'e4'));    // true
+console.log(isValidSan(pos, 'Nf3'));  // true
+console.log(isValidSan(pos, 'Ke2'));  // false (illegal)
+console.log(isValidSan(pos, 'Qh8'));  // false (illegal)
+```

@@ -1,0 +1,409 @@
+---
+title: Squares and Bitboards
+description: SquareSet class and bitboard operations for efficient square manipulation
+---
+
+The `SquareSet` class is chessops' implementation of a bitboard - an immutable set of squares represented as a 64-bit integer. It provides efficient set operations and is fundamental to move generation and board representation.
+
+## SquareSet Class
+
+An immutable set of squares implemented as a bitboard using two 32-bit integers:
+
+```typescript
+export class SquareSet implements Iterable<Square> {
+  readonly lo: number;  // Lower 32 bits (squares 0-31)
+  readonly hi: number;  // Upper 32 bits (squares 32-63)
+
+  constructor(lo: number, hi: number) {
+    this.lo = lo | 0;
+    this.hi = hi | 0;
+  }
+}
+```
+
+## Creating SquareSets
+
+### Static Constructors
+
+#### fromSquare
+
+Create a SquareSet containing a single square:
+
+```typescript
+static fromSquare(square: Square): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, parseSquare } from 'chessops';
+
+const e4 = SquareSet.fromSquare(parseSquare('e4')!);
+```
+
+#### fromRank / fromFile
+
+Create a SquareSet containing all squares on a rank or file:
+
+```typescript
+static fromRank(rank: number): SquareSet  // rank 0-7
+static fromFile(file: number): SquareSet  // file 0-7
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const rank1 = SquareSet.fromRank(0);  // All squares on rank 1
+const fileA = SquareSet.fromFile(0);  // All squares on a-file
+const rank8 = SquareSet.fromRank(7);  // All squares on rank 8
+```
+
+#### Predefined Sets
+
+```typescript
+static empty(): SquareSet      // No squares
+static full(): SquareSet       // All 64 squares
+static corners(): SquareSet    // a1, h1, a8, h8
+static center(): SquareSet     // d4, e4, d5, e5
+static backranks(): SquareSet  // Ranks 1 and 8
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const empty = SquareSet.empty();
+const allSquares = SquareSet.full();
+const corners = SquareSet.corners();
+const center = SquareSet.center();
+```
+
+#### Color-Specific Sets
+
+```typescript
+static backrank(color: Color): SquareSet
+static lightSquares(): SquareSet
+static darkSquares(): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const whiteBackrank = SquareSet.backrank('white');  // Rank 1
+const blackBackrank = SquareSet.backrank('black');  // Rank 8
+const lightSquares = SquareSet.lightSquares();
+const darkSquares = SquareSet.darkSquares();
+```
+
+## Set Operations
+
+### Boolean Operations
+
+#### union
+
+Combine two sets (bitwise OR):
+
+```typescript
+union(other: SquareSet): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const files = SquareSet.fromFile(0).union(SquareSet.fromFile(7));
+// Contains all squares on a-file and h-file
+```
+
+#### intersect
+
+Get common squares (bitwise AND):
+
+```typescript
+intersect(other: SquareSet): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const corner = SquareSet.fromRank(0).intersect(SquareSet.fromFile(0));
+// Contains only a1
+```
+
+#### diff
+
+Remove squares from the set (set difference):
+
+```typescript
+diff(other: SquareSet): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const centerWithoutE4 = SquareSet.center().diff(
+  SquareSet.fromSquare(parseSquare('e4')!)
+);
+```
+
+#### xor
+
+Symmetric difference (bitwise XOR):
+
+```typescript
+xor(other: SquareSet): SquareSet
+```
+
+#### complement
+
+Invert the set (bitwise NOT):
+
+```typescript
+complement(): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const emptySquares = occupied.complement();
+```
+
+### Set Comparison
+
+```typescript
+intersects(other: SquareSet): boolean   // Have common squares
+isDisjoint(other: SquareSet): boolean   // No common squares
+supersetOf(other: SquareSet): boolean   // Contains all of other
+subsetOf(other: SquareSet): boolean     // Contained in other
+equals(other: SquareSet): boolean       // Exactly equal
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const rank1 = SquareSet.fromRank(0);
+const fileA = SquareSet.fromFile(0);
+
+if (rank1.intersects(fileA)) {
+  console.log('Rank 1 and file A share square a1');
+}
+
+if (SquareSet.fromSquare(0).subsetOf(rank1)) {
+  console.log('a1 is on rank 1');
+}
+```
+
+## Single Square Operations
+
+### Checking Membership
+
+```typescript
+has(square: Square): boolean
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, parseSquare } from 'chessops';
+
+const center = SquareSet.center();
+if (center.has(parseSquare('e4')!)) {
+  console.log('e4 is in the center');
+}
+```
+
+### Adding and Removing Squares
+
+```typescript
+with(square: Square): SquareSet       // Add square
+without(square: Square): SquareSet    // Remove square
+toggle(square: Square): SquareSet     // Toggle square
+set(square: Square, on: boolean): SquareSet  // Conditional set
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, parseSquare } from 'chessops';
+
+let squares = SquareSet.empty();
+squares = squares.with(parseSquare('e4')!);
+squares = squares.with(parseSquare('d4')!);
+squares = squares.without(parseSquare('e4')!);
+// squares now contains only d4
+```
+
+## Querying SquareSets
+
+### Size and Emptiness
+
+```typescript
+size(): number            // Count of squares in set
+isEmpty(): boolean        // True if no squares
+nonEmpty(): boolean       // True if at least one square
+moreThanOne(): boolean    // True if multiple squares
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const corners = SquareSet.corners();
+console.log(corners.size());  // 4
+console.log(corners.moreThanOne());  // true
+```
+
+### Getting Specific Squares
+
+```typescript
+first(): Square | undefined      // Lowest square number
+last(): Square | undefined       // Highest square number
+singleSquare(): Square | undefined  // Only if exactly one square
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, makeSquare } from 'chessops';
+
+const corners = SquareSet.corners();
+console.log(makeSquare(corners.first()!));  // 'a1'
+console.log(makeSquare(corners.last()!));   // 'h8'
+
+const king = board.pieces('white', 'king');
+const kingSquare = king.singleSquare();  // Square if exactly one king
+```
+
+### Removing First Square
+
+```typescript
+withoutFirst(): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { SquareSet } from 'chessops';
+
+let remaining = SquareSet.fromRank(0);
+while (remaining.nonEmpty()) {
+  const square = remaining.first()!;
+  console.log(square);
+  remaining = remaining.withoutFirst();
+}
+```
+
+## Iteration
+
+### Forward Iteration
+
+SquareSet implements `Iterable<Square>`, so you can use for-of loops:
+
+```typescript
+*[Symbol.iterator](): Iterator<Square>
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, makeSquare } from 'chessops';
+
+const center = SquareSet.center();
+for (const square of center) {
+  console.log(makeSquare(square));  // d4, e4, d5, e5
+}
+```
+
+### Reverse Iteration
+
+```typescript
+*reversed(): Iterable<Square>
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, makeSquare } from 'chessops';
+
+const rank1 = SquareSet.fromRank(0);
+for (const square of rank1.reversed()) {
+  console.log(makeSquare(square));  // h1, g1, f1, ..., a1
+}
+```
+
+## Bitwise Operations
+
+These low-level operations are useful for implementing chess algorithms:
+
+### Shifting
+
+```typescript
+shl64(shift: number): SquareSet  // Left shift
+shr64(shift: number): SquareSet  // Right shift
+```
+
+**Example:**
+
+```typescript
+import { SquareSet, parseSquare } from 'chessops';
+
+// Shift e4 one rank up (to e5)
+const e4 = SquareSet.fromSquare(parseSquare('e4')!);
+const e5 = e4.shl64(8);
+```
+
+### Bit Manipulation
+
+```typescript
+bswap64(): SquareSet   // Byte swap
+rbit64(): SquareSet    // Reverse bits
+minus64(other: SquareSet): SquareSet  // 64-bit subtraction
+```
+
+## Practical Examples
+
+### Finding All Pawns on Light Squares
+
+```typescript
+import { Board, SquareSet } from 'chessops';
+
+function lightSquarePawns(board: Board): SquareSet {
+  return board.pawn.intersect(SquareSet.lightSquares());
+}
+```
+
+### Checking if King is in the Center
+
+```typescript
+import { Board, SquareSet } from 'chessops';
+
+function isKingInCenter(board: Board, color: Color): boolean {
+  const king = board.pieces(color, 'king');
+  return king.intersects(SquareSet.center());
+}
+```
+
+### Getting All Pieces on the Back Rank
+
+```typescript
+import { Board, SquareSet, Color } from 'chessops';
+
+function backrankPieces(board: Board, color: Color): SquareSet {
+  return board[color].intersect(SquareSet.backrank(color));
+}
+```

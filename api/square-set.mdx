@@ -1,0 +1,729 @@
+---
+title: SquareSet
+description: An immutable set of squares implemented as a bitboard
+---
+
+## Overview
+
+`SquareSet` is an immutable set of squares, implemented as a 64-bit bitboard split into two 32-bit numbers (`lo` and `hi`). It provides efficient set operations for chess square manipulation.
+
+```typescript
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquare(0).union(SquareSet.fromSquare(7));
+console.log(squares.size()); // 2
+```
+
+## Constructor
+
+<ParamField path="lo" type="number" required>
+  Lower 32 bits (squares 0-31)
+</ParamField>
+
+<ParamField path="hi" type="number" required>
+  Higher 32 bits (squares 32-63)
+</ParamField>
+
+```typescript
+const squares = new SquareSet(0xff, 0); // First rank
+```
+
+## Properties
+
+<ResponseField name="lo" type="number">
+  Lower 32 bits representing squares 0-31
+</ResponseField>
+
+<ResponseField name="hi" type="number">
+  Higher 32 bits representing squares 32-63
+</ResponseField>
+
+## Static Factory Methods
+
+### fromSquare
+
+```typescript
+static fromSquare(square: Square): SquareSet
+```
+
+Creates a `SquareSet` containing a single square.
+
+<ParamField path="square" type="Square" required>
+  The square to include (0-63)
+</ParamField>
+
+```typescript
+const e4 = SquareSet.fromSquare(28);
+```
+
+### fromRank
+
+```typescript
+static fromRank(rank: number): SquareSet
+```
+
+Creates a `SquareSet` containing all squares of a given rank.
+
+<ParamField path="rank" type="number" required>
+  Rank number (0-7, where 0 is the first rank)
+</ParamField>
+
+```typescript
+const firstRank = SquareSet.fromRank(0);
+```
+
+### fromFile
+
+```typescript
+static fromFile(file: number): SquareSet
+```
+
+Creates a `SquareSet` containing all squares of a given file.
+
+<ParamField path="file" type="number" required>
+  File number (0-7, where 0 is the a-file)
+</ParamField>
+
+```typescript
+const aFile = SquareSet.fromFile(0);
+```
+
+### empty
+
+```typescript
+static empty(): SquareSet
+```
+
+Creates an empty `SquareSet`.
+
+```typescript
+const empty = SquareSet.empty();
+```
+
+### full
+
+```typescript
+static full(): SquareSet
+```
+
+Creates a `SquareSet` containing all 64 squares.
+
+```typescript
+const allSquares = SquareSet.full();
+```
+
+### corners
+
+```typescript
+static corners(): SquareSet
+```
+
+Creates a `SquareSet` containing the four corner squares (a1, h1, a8, h8).
+
+```typescript
+const corners = SquareSet.corners();
+```
+
+### center
+
+```typescript
+static center(): SquareSet
+```
+
+Creates a `SquareSet` containing the four center squares (d4, e4, d5, e5).
+
+```typescript
+const center = SquareSet.center();
+```
+
+### backranks
+
+```typescript
+static backranks(): SquareSet
+```
+
+Creates a `SquareSet` containing both first and eighth ranks.
+
+```typescript
+const backranks = SquareSet.backranks();
+```
+
+### backrank
+
+```typescript
+static backrank(color: Color): SquareSet
+```
+
+Creates a `SquareSet` containing the backrank for the given color.
+
+<ParamField path="color" type="Color" required>
+  Either 'white' or 'black'
+</ParamField>
+
+```typescript
+const whiteBackrank = SquareSet.backrank('white'); // First rank
+const blackBackrank = SquareSet.backrank('black'); // Eighth rank
+```
+
+### lightSquares
+
+```typescript
+static lightSquares(): SquareSet
+```
+
+Creates a `SquareSet` containing all light squares.
+
+```typescript
+const lightSquares = SquareSet.lightSquares();
+```
+
+### darkSquares
+
+```typescript
+static darkSquares(): SquareSet
+```
+
+Creates a `SquareSet` containing all dark squares.
+
+```typescript
+const darkSquares = SquareSet.darkSquares();
+```
+
+## Set Operations
+
+### complement
+
+```typescript
+complement(): SquareSet
+```
+
+Returns the complement (bitwise NOT) of this set.
+
+```typescript
+const occupied = SquareSet.fromSquare(0);
+const empty = occupied.complement();
+```
+
+### xor
+
+```typescript
+xor(other: SquareSet): SquareSet
+```
+
+Returns the symmetric difference (XOR) of this set and another.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to XOR with
+</ParamField>
+
+```typescript
+const a = SquareSet.fromSquare(0);
+const b = SquareSet.fromSquare(1);
+const result = a.xor(b); // Contains both squares
+```
+
+### union
+
+```typescript
+union(other: SquareSet): SquareSet
+```
+
+Returns the union (OR) of this set and another.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to union with
+</ParamField>
+
+```typescript
+const a = SquareSet.fromSquare(0);
+const b = SquareSet.fromSquare(1);
+const both = a.union(b);
+```
+
+### intersect
+
+```typescript
+intersect(other: SquareSet): SquareSet
+```
+
+Returns the intersection (AND) of this set and another.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to intersect with
+</ParamField>
+
+```typescript
+const whitePieces = board.white;
+const pawns = board.pawn;
+const whitePawns = whitePieces.intersect(pawns);
+```
+
+### diff
+
+```typescript
+diff(other: SquareSet): SquareSet
+```
+
+Returns the difference of this set and another (elements in this but not in other).
+
+<ParamField path="other" type="SquareSet" required>
+  The set to subtract
+</ParamField>
+
+```typescript
+const allSquares = SquareSet.full();
+const occupied = board.occupied;
+const empty = allSquares.diff(occupied);
+```
+
+### intersects
+
+```typescript
+intersects(other: SquareSet): boolean
+```
+
+Checks if this set has any squares in common with another.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to check
+</ParamField>
+
+```typescript
+if (lightSquares.intersects(bishops)) {
+  console.log('Has light-squared bishop');
+}
+```
+
+### isDisjoint
+
+```typescript
+isDisjoint(other: SquareSet): boolean
+```
+
+Checks if this set has no squares in common with another.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to check
+</ParamField>
+
+```typescript
+if (whiteSquares.isDisjoint(blackSquares)) {
+  console.log('No overlap');
+}
+```
+
+### supersetOf
+
+```typescript
+supersetOf(other: SquareSet): boolean
+```
+
+Checks if this set contains all squares from another set.
+
+<ParamField path="other" type="SquareSet" required>
+  The potential subset
+</ParamField>
+
+```typescript
+if (occupied.supersetOf(whitePieces)) {
+  console.log('All white pieces are on occupied squares');
+}
+```
+
+### subsetOf
+
+```typescript
+subsetOf(other: SquareSet): boolean
+```
+
+Checks if all squares in this set are contained in another set.
+
+<ParamField path="other" type="SquareSet" required>
+  The potential superset
+</ParamField>
+
+```typescript
+if (whitePawns.subsetOf(whitePieces)) {
+  console.log('Valid subset');
+}
+```
+
+## Bitwise Operations
+
+### shr64
+
+```typescript
+shr64(shift: number): SquareSet
+```
+
+Shifts the bitboard right by the specified number of bits.
+
+<ParamField path="shift" type="number" required>
+  Number of bits to shift (0-64)
+</ParamField>
+
+```typescript
+const shifted = squares.shr64(8); // Shift down one rank
+```
+
+### shl64
+
+```typescript
+shl64(shift: number): SquareSet
+```
+
+Shifts the bitboard left by the specified number of bits.
+
+<ParamField path="shift" type="number" required>
+  Number of bits to shift (0-64)
+</ParamField>
+
+```typescript
+const shifted = squares.shl64(8); // Shift up one rank
+```
+
+### bswap64
+
+```typescript
+bswap64(): SquareSet
+```
+
+Byte-swaps the 64-bit value.
+
+```typescript
+const swapped = squares.bswap64();
+```
+
+### rbit64
+
+```typescript
+rbit64(): SquareSet
+```
+
+Reverses the bits in the 64-bit value.
+
+```typescript
+const reversed = squares.rbit64();
+```
+
+### minus64
+
+```typescript
+minus64(other: SquareSet): SquareSet
+```
+
+Subtracts another set as a 64-bit integer.
+
+<ParamField path="other" type="SquareSet" required>
+  The set to subtract
+</ParamField>
+
+```typescript
+const result = a.minus64(b);
+```
+
+## Comparison Methods
+
+### equals
+
+```typescript
+equals(other: SquareSet): boolean
+```
+
+Checks if two sets are exactly equal.
+
+<ParamField path="other" type="SquareSet" required>
+  The other set to compare
+</ParamField>
+
+```typescript
+if (set1.equals(set2)) {
+  console.log('Sets are identical');
+}
+```
+
+## Query Methods
+
+### size
+
+```typescript
+size(): number
+```
+
+Returns the number of squares in the set.
+
+```typescript
+const count = squares.size();
+```
+
+### isEmpty
+
+```typescript
+isEmpty(): boolean
+```
+
+Checks if the set contains no squares.
+
+```typescript
+if (squares.isEmpty()) {
+  console.log('No squares in set');
+}
+```
+
+### nonEmpty
+
+```typescript
+nonEmpty(): boolean
+```
+
+Checks if the set contains at least one square.
+
+```typescript
+if (squares.nonEmpty()) {
+  console.log('Has squares');
+}
+```
+
+### has
+
+```typescript
+has(square: Square): boolean
+```
+
+Checks if the set contains a specific square.
+
+<ParamField path="square" type="Square" required>
+  The square to check (0-63)
+</ParamField>
+
+```typescript
+if (occupied.has(28)) {
+  console.log('e4 is occupied');
+}
+```
+
+### moreThanOne
+
+```typescript
+moreThanOne(): boolean
+```
+
+Checks if the set contains more than one square.
+
+```typescript
+if (squares.moreThanOne()) {
+  console.log('Multiple squares present');
+}
+```
+
+## Modification Methods
+
+### set
+
+```typescript
+set(square: Square, on: boolean): SquareSet
+```
+
+Adds or removes a square based on the boolean flag.
+
+<ParamField path="square" type="Square" required>
+  The square to add or remove (0-63)
+</ParamField>
+
+<ParamField path="on" type="boolean" required>
+  If true, adds the square; if false, removes it
+</ParamField>
+
+```typescript
+const updated = squares.set(28, true); // Add e4
+const removed = squares.set(28, false); // Remove e4
+```
+
+### with
+
+```typescript
+with(square: Square): SquareSet
+```
+
+Returns a new set with the specified square added.
+
+<ParamField path="square" type="Square" required>
+  The square to add (0-63)
+</ParamField>
+
+```typescript
+const withE4 = squares.with(28);
+```
+
+### without
+
+```typescript
+without(square: Square): SquareSet
+```
+
+Returns a new set with the specified square removed.
+
+<ParamField path="square" type="Square" required>
+  The square to remove (0-63)
+</ParamField>
+
+```typescript
+const withoutE4 = squares.without(28);
+```
+
+### toggle
+
+```typescript
+toggle(square: Square): SquareSet
+```
+
+Returns a new set with the specified square toggled (added if absent, removed if present).
+
+<ParamField path="square" type="Square" required>
+  The square to toggle (0-63)
+</ParamField>
+
+```typescript
+const toggled = squares.toggle(28);
+```
+
+## Iteration Methods
+
+### first
+
+```typescript
+first(): Square | undefined
+```
+
+Returns the first (lowest numbered) square in the set, or undefined if empty.
+
+```typescript
+const firstSquare = squares.first();
+if (firstSquare !== undefined) {
+  console.log('First square:', firstSquare);
+}
+```
+
+### last
+
+```typescript
+last(): Square | undefined
+```
+
+Returns the last (highest numbered) square in the set, or undefined if empty.
+
+```typescript
+const lastSquare = squares.last();
+```
+
+### singleSquare
+
+```typescript
+singleSquare(): Square | undefined
+```
+
+Returns the square if the set contains exactly one square, otherwise undefined.
+
+```typescript
+const king = board.pieces('white', 'king').singleSquare();
+if (king !== undefined) {
+  console.log('White king is on square', king);
+}
+```
+
+### withoutFirst
+
+```typescript
+withoutFirst(): SquareSet
+```
+
+Returns a new set with the first square removed.
+
+```typescript
+const rest = squares.withoutFirst();
+```
+
+### [Symbol.iterator]
+
+```typescript
+[Symbol.iterator](): Iterator<Square>
+```
+
+Iterates through all squares in ascending order.
+
+```typescript
+for (const square of squares) {
+  console.log(square);
+}
+
+// Or use spread operator
+const squareArray = [...squares];
+```
+
+### reversed
+
+```typescript
+reversed(): Iterable<Square>
+```
+
+Iterates through all squares in descending order.
+
+```typescript
+for (const square of squares.reversed()) {
+  console.log(square);
+}
+```
+
+## Examples
+
+### Finding Attacked Squares
+
+```typescript
+import { SquareSet } from 'chessops';
+import { attacks } from 'chessops/attacks';
+
+const piece = { role: 'queen', color: 'white' };
+const square = 28; // e4
+const occupied = board.occupied;
+
+const attacked = attacks(piece, square, occupied);
+console.log(`Queen on e4 attacks ${attacked.size()} squares`);
+```
+
+### Filtering Squares by Color
+
+```typescript
+const bishops = board.bishop;
+const lightSquareBishops = bishops.intersect(SquareSet.lightSquares());
+const darkSquareBishops = bishops.intersect(SquareSet.darkSquares());
+
+console.log('Light bishops:', lightSquareBishops.size());
+console.log('Dark bishops:', darkSquareBishops.size());
+```
+
+### Building Custom Square Sets
+
+```typescript
+// Create a set of center files (c, d, e, f)
+let center = SquareSet.empty();
+for (let file = 2; file <= 5; file++) {
+  center = center.union(SquareSet.fromFile(file));
+}
+
+// Find pieces in the center
+const centerPieces = board.occupied.intersect(center);
+console.log('Pieces in center:', centerPieces.size());
+```
+
+### Iterating with Condition
+
+```typescript
+const pawns = board.pawn.intersect(board.white);
+const promotableRank = SquareSet.fromRank(6);
+
+for (const pawn of pawns) {
+  if (promotableRank.has(pawn)) {
+    console.log('Pawn ready to promote on square', pawn);
+  }
+}
+```

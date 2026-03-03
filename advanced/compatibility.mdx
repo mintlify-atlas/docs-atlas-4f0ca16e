@@ -1,0 +1,400 @@
+---
+title: 'Compatibility'
+description: 'Integration with chessground and scalachess'
+icon: 'link'
+---
+
+## Overview
+
+The `compat` module provides functions to convert between formats used by chessops, [chessground](https://github.com/lichess-org/chessground) (Lichess's board UI), and [scalachess](https://github.com/lichess-org/scalachess) (Lichess's backend chess library).
+
+These utilities enable seamless integration with the Lichess ecosystem and other chess applications.
+
+## Chessground Integration
+
+Chessground is the chess board UI library used by Lichess. It requires move destinations in a specific format.
+
+### Legal Move Destinations
+
+```typescript
+chessgroundDests(
+  pos: Position,
+  opts?: ChessgroundDestsOpts
+): Map<SquareName, SquareName[]>
+```
+
+Computes legal move destinations in the format expected by chessground.
+
+**Parameters**:
+- `pos` - The current position
+- `opts.chess960` - Optional boolean for Chess960 mode (default: `false`)
+
+**Returns**: A map from origin squares to arrays of destination squares.
+
+```typescript
+import { chessgroundDests } from 'chessops/compat';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const dests = chessgroundDests(pos);
+// Returns: Map {
+//   'a2' => ['a3', 'a4'],
+//   'b2' => ['b3', 'b4'],
+//   'b1' => ['a3', 'c3'],
+//   ...
+// }
+```
+
+### Castling Representation
+
+The function handles both standard and Chess960 castling representations:
+
+**Standard Chess** (opts.chess960 = false or undefined):
+- Includes both king destination and rook destination for castling
+- Allows chessground's `rookCastles` option to work correctly
+- Example: King on e1 can move to both g1 (king target) and h1 (rook square) for kingside castling
+
+```typescript
+const dests = chessgroundDests(pos); // Standard mode
+// If white can castle kingside:
+// 'e1' => ['d1', 'f1', 'g1', 'h1', ...]
+//         ^^^^  ^^^^  ^^^^  ^^^^
+//         queenside:  kingside:
+//         rook, king  king, rook
+```
+
+**Chess960** (opts.chess960 = true):
+- Only includes the actual king destination
+- No special rook castling destinations
+
+```typescript
+const dests = chessgroundDests(pos, { chess960: true });
+// Only king's actual destination square
+```
+
+**Implementation details** (from source):
+
+```typescript
+export const chessgroundDests = (pos: Position, opts?: ChessgroundDestsOpts): Map<SquareName, SquareName[]> => {
+  const result = new Map();
+  const ctx = pos.ctx();
+  for (const [from, squares] of pos.allDests(ctx)) {
+    if (squares.nonEmpty()) {
+      const d = Array.from(squares, makeSquare);
+      if (!opts?.chess960 && from === ctx.king && squareFile(from) === 4) {
+        // Add both castling representations for standard chess
+        if (squares.has(0)) d.push('c1');      // Queenside white
+        else if (squares.has(56)) d.push('c8'); // Queenside black
+        if (squares.has(7)) d.push('g1');      // Kingside white
+        else if (squares.has(63)) d.push('g8'); // Kingside black
+      }
+      result.set(makeSquare(from), d);
+    }
+  }
+  return result;
+};
+```
+
+### Move Format Conversion
+
+```typescript
+chessgroundMove(move: Move): SquareName[]
+```
+
+Converts a chessops move to chessground's array format.
+
+**Returns**:
+- Normal moves: `[from, to]`
+- Drop moves: `[to]`
+
+```typescript
+import { chessgroundMove } from 'chessops/compat';
+import { parseUci } from 'chessops/util';
+
+const move = parseUci('e2e4')!;
+const cgMove = chessgroundMove(move);
+// Returns: ['e2', 'e4']
+
+// For a drop move (Crazyhouse):
+const drop = { role: 'pawn', to: 36 }; // e5
+const cgDrop = chessgroundMove(drop);
+// Returns: ['e5']
+```
+
+### Example: Full Chessground Integration
+
+```typescript
+import { chessgroundDests, chessgroundMove } from 'chessops/compat';
+import { Chess } from 'chessops/chess';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+// Initialize position
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+let pos = Chess.fromSetup(setup).unwrap();
+
+// Get legal moves for chessground
+const dests = chessgroundDests(pos);
+
+// Configure chessground (pseudo-code)
+chessground.set({
+  fen: makeFen(pos.toSetup()),
+  movable: {
+    dests: dests,
+    color: pos.turn,
+  },
+});
+
+// When user makes a move
+const uciMove = 'e2e4';
+const move = parseUci(uciMove)!;
+
+if (pos.isLegal(move)) {
+  pos = pos.play(move);
+  
+  // Update chessground
+  chessground.set({
+    fen: makeFen(pos.toSetup()),
+    movable: {
+      dests: chessgroundDests(pos),
+      color: pos.turn,
+    },
+  });
+  
+  // Animate the move
+  chessground.move(...chessgroundMove(move));
+}
+```
+
+## Scalachess Integration
+
+Scalachess is the chess logic library powering Lichess's backend. It uses a compact binary format for moves.
+
+### Character Pair Encoding
+
+```typescript
+scalachessCharPair(move: Move): string
+```
+
+Encodes a move as a two-character string compatible with scalachess.
+
+**Format**:
+- Two characters representing origin and destination
+- Characters are offset by 35 from ASCII
+- Promotions encoded in the second character
+
+```typescript
+import { scalachessCharPair } from 'chessops/compat';
+import { parseUci } from 'chessops/util';
+
+const move = parseUci('e2e4')!;
+const encoded = scalachessCharPair(move);
+// Returns a 2-character string
+
+const promotion = parseUci('e7e8q')!;
+const encodedPromo = scalachessCharPair(promotion);
+// Promotion type is encoded in the second character
+```
+
+**Implementation** (from source):
+
+```typescript
+export const scalachessCharPair = (move: Move): string =>
+  isDrop(move)
+    ? String.fromCharCode(
+      35 + move.to,
+      35 + 64 + 8 * 5 + ['queen', 'rook', 'bishop', 'knight', 'pawn'].indexOf(move.role),
+    )
+    : String.fromCharCode(
+      35 + move.from,
+      move.promotion
+        ? 35 + 64 + 8 * ['queen', 'rook', 'bishop', 'knight', 'king'].indexOf(move.promotion) + squareFile(move.to)
+        : 35 + move.to,
+    );
+```
+
+**Encoding details**:
+- Normal moves: First char = from square + 35, Second char = to square + 35
+- Promotions: Second char encodes both promotion piece and destination file
+- Drops: Special encoding for piece type and destination
+
+<Note>
+This compact encoding is particularly efficient for storing and transmitting moves in databases and APIs. Each move requires only 2 bytes.
+</Note>
+
+## Lichess Variant Conversion
+
+Convert between Lichess variant names and chessops rule sets.
+
+### Lichess Rules to Chessops
+
+```typescript
+lichessRules(
+  variant: 'standard' | 'chess960' | 'antichess' | 'fromPosition' |
+           'kingOfTheHill' | 'threeCheck' | 'atomic' | 'horde' |
+           'racingKings' | 'crazyhouse'
+): Rules
+```
+
+Converts Lichess variant names to chessops `Rules` type.
+
+```typescript
+import { lichessRules } from 'chessops/compat';
+
+const rules = lichessRules('threeCheck');
+// Returns: '3check'
+
+const standard = lichessRules('standard');
+// Returns: 'chess'
+
+const koth = lichessRules('kingOfTheHill');
+// Returns: 'kingofthehill'
+```
+
+**Variant mappings**:
+- `'standard'`, `'chess960'`, `'fromPosition'` → `'chess'`
+- `'threeCheck'` → `'3check'`
+- `'kingOfTheHill'` → `'kingofthehill'`
+- `'racingKings'` → `'racingkings'`
+- Other variants remain unchanged
+
+### Chessops Rules to Lichess
+
+```typescript
+lichessVariant(
+  rules: Rules
+): 'standard' | 'antichess' | 'kingOfTheHill' | 'threeCheck' |
+    'atomic' | 'horde' | 'racingKings' | 'crazyhouse'
+```
+
+Converts chessops `Rules` to Lichess variant names.
+
+```typescript
+import { lichessVariant } from 'chessops/compat';
+
+const variant = lichessVariant('3check');
+// Returns: 'threeCheck'
+
+const standard = lichessVariant('chess');
+// Returns: 'standard'
+
+const atomic = lichessVariant('atomic');
+// Returns: 'atomic'
+```
+
+### Full Variant Integration Example
+
+```typescript
+import { lichessRules, lichessVariant, chessgroundDests } from 'chessops/compat';
+import { Chess, Position } from 'chessops/chess';
+import { defaultPosition } from 'chessops/variant';
+
+function initializeLichessPosition(variantName: string): {
+  pos: Position;
+  dests: Map<SquareName, SquareName[]>;
+} {
+  const rules = lichessRules(variantName as any);
+  const pos = defaultPosition(rules).unwrap();
+  const dests = chessgroundDests(pos, {
+    chess960: variantName === 'chess960',
+  });
+  
+  return { pos, dests };
+}
+
+// Usage
+const { pos, dests } = initializeLichessPosition('threeCheck');
+```
+
+## Complete Integration Example
+
+Here's a full example of integrating chessops with a Lichess-like chess application:
+
+```typescript
+import { Chess, Position } from 'chessops/chess';
+import { chessgroundDests, chessgroundMove, scalachessCharPair, lichessRules } from 'chessops/compat';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci, makeSan } from 'chessops/san';
+import { defaultPosition } from 'chessops/variant';
+
+class ChessGame {
+  private pos: Position;
+  
+  constructor(variant: string = 'standard', fen?: string) {
+    if (fen) {
+      const setup = parseFen(fen).unwrap();
+      this.pos = Chess.fromSetup(setup).unwrap();
+    } else {
+      const rules = lichessRules(variant as any);
+      this.pos = defaultPosition(rules).unwrap();
+    }
+  }
+  
+  // Get legal moves in chessground format
+  getLegalMoves() {
+    return chessgroundDests(this.pos);
+  }
+  
+  // Make a move from UCI notation
+  makeMove(uci: string): boolean {
+    const move = parseUci(uci);
+    if (!move || !this.pos.isLegal(move)) {
+      return false;
+    }
+    
+    this.pos = this.pos.play(move);
+    return true;
+  }
+  
+  // Get current FEN
+  getFen(): string {
+    return makeFen(this.pos.toSetup());
+  }
+  
+  // Get move in scalachess binary format
+  encodeMove(uci: string): string | null {
+    const move = parseUci(uci);
+    if (!move) return null;
+    return scalachessCharPair(move);
+  }
+  
+  // Check game status
+  isGameOver(): boolean {
+    return this.pos.isEnd();
+  }
+  
+  getOutcome() {
+    return this.pos.outcome();
+  }
+}
+
+// Usage
+const game = new ChessGame('standard');
+console.log(game.getLegalMoves());
+game.makeMove('e2e4');
+console.log(game.getFen());
+```
+
+<Tip>
+When building a chess application with chessground, use `chessgroundDests()` to efficiently provide legal moves without converting formats manually.
+</Tip>
+
+## Performance Considerations
+
+- `chessgroundDests()` computes all legal moves, which is O(n) for number of pieces
+- `scalachessCharPair()` is O(1) encoding
+- Variant conversions are simple string mappings (O(1))
+
+<Tip>
+For real-time applications, cache the result of `chessgroundDests()` and only recompute after moves are played.
+</Tip>
+
+## Related
+
+- [FEN Notation](/notation/fen) - Position encoding
+- [UCI Format](/notation/uci) - Universal Chess Interface
+- [Move Generation](/examples/move-generation) - Computing legal moves
+- [Variants](/variants/overview) - Chess variant support

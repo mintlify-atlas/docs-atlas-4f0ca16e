@@ -1,80 +1,190 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get started with chessops in minutes
 ---
 
-## Get started in three steps
+# Quick start
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through the basics of using chessops to work with chess positions and moves.
 
-### Step 1: Set up your local environment
+## Basic workflow
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Install chessops">
+    Install the package using npm, yarn, or pnpm:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    npm install chessops
+    ```
+  </Step>
+  
+  <Step title="Create a chess position">
+    Import the necessary modules and create a position from FEN notation:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```typescript
+    import { Chess } from 'chessops/chess';
+    import { parseFen } from 'chessops/fen';
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    // Parse a FEN string to create a Setup
+    const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+    
+    // Create a Chess position from the setup
+    const pos = Chess.fromSetup(setup).unwrap();
+    ```
+    
+    <Note>
+    The `.unwrap()` method extracts the value from a `Result` type. In production code, you should handle errors appropriately.
+    </Note>
+  </Step>
+  
+  <Step title="Generate and make moves">
+    Use the position to generate legal moves and play them:
+    
+    ```typescript
+    import { parseSquare } from 'chessops';
+    
+    // Get all legal moves
+    const moves = pos.legalMoves();
+    console.log(`${moves.size()} legal moves available`);
+    
+    // Get legal moves from a specific square (e4)
+    const e2 = parseSquare('e2')!;
+    const movesFromE2 = pos.dests(e2);
+    
+    // Make a move (e2-e4)
+    const e4 = parseSquare('e4')!;
+    pos.play({ from: e2, to: e4 });
+    ```
+  </Step>
+  
+  <Step title="Check position status">
+    Query the position to check game state:
+    
+    ```typescript
+    // Check if position is checkmate
+    if (pos.isCheckmate()) {
+      console.log('Checkmate!');
+    }
+    
+    // Check if position is in check
+    if (pos.isCheck()) {
+      console.log('Check!');
+    }
+    
+    // Get the outcome if game is over
+    const outcome = pos.outcome();
+    if (outcome) {
+      console.log('Game over. Winner:', outcome.winner || 'Draw');
+    }
+    ```
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Complete example
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Here's a complete example that demonstrates parsing FEN, making moves, and checking for checkmate:
 
-### Step 3: Go live
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseSquare } from 'chessops';
+import { parseSan, makeSan } from 'chessops/san';
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+// Parse Scholar's Mate position (4 moves before mate)
+const fenString = 'r1bqkbnr/ppp2Qpp/2np4/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4';
+const setup = parseFen(fenString).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Check position status
+console.log('Is checkmate?', pos.isCheckmate()); // true
+console.log('Is check?', pos.isCheck()); // true
+
+const outcome = pos.outcome();
+if (outcome) {
+  console.log('Winner:', outcome.winner); // 'white'
+}
+
+// Working with the starting position
+const startSetup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const startPos = Chess.fromSetup(startSetup).unwrap();
+
+// Parse and play moves in SAN notation
+const move1 = parseSan(startPos, 'e4');
+if (move1) {
+  const sanNotation = makeSan(startPos, move1);
+  console.log('Playing:', sanNotation); // 'e4'
+  startPos.play(move1);
+}
+
+// Get current FEN
+const currentFen = makeFen(startPos.toSetup());
+console.log('Current position:', currentFen);
+```
+
+<Info>
+Chessops uses bitboards internally for efficient position representation and move generation. The `SquareSet` class provides methods for working with sets of squares.
+</Info>
+
+## Working with PGN
+
+Chessops includes a powerful PGN parser for reading chess games:
+
+```typescript
+import { parsePgn, startingPosition } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+
+const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 *';
+const games = parsePgn(pgn);
+
+for (const game of games) {
+  const pos = startingPosition(game.headers).unwrap();
+  
+  for (const node of game.moves.mainline()) {
+    const move = parseSan(pos, node.san);
+    if (!move) break; // Illegal move
+    pos.play(move);
+  }
+  
+  console.log('Final position reached');
+}
+```
+
+## Using chess variants
+
+Chessops supports 8 different chess variants:
+
+```typescript
+import { Crazyhouse, Atomic, Antichess, KingOfTheHill } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+// Create a Crazyhouse position
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const crazyhousePos = Crazyhouse.fromSetup(setup).unwrap();
+
+// Atomic chess
+const atomicPos = Atomic.fromSetup(setup).unwrap();
+
+// Each variant has its own rules for move generation and game end conditions
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you understand the basics, explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Attack calculations" icon="chess" href="https://niklasf.github.io/chessops/modules/attacks.html">
+    Learn about attack and ray calculations
+  </Card>
+  
+  <Card title="Board transformations" icon="rotate" href="https://niklasf.github.io/chessops/modules/transform.html">
+    Mirror and rotate positions
+  </Card>
+  
+  <Card title="Streaming PGN parser" icon="stream" href="https://niklasf.github.io/chessops/modules/pgn.html">
+    Process large PGN files efficiently
+  </Card>
+  
+  <Card title="Full API reference" icon="book" href="https://niklasf.github.io/chessops/">
+    Explore the complete API documentation
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

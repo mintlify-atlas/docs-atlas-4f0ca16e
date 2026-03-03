@@ -1,0 +1,857 @@
+---
+title: 'Chess Variants'
+description: 'Position classes for chess variants: Crazyhouse, Atomic, Antichess, King of the Hill, Three-Check, Racing Kings, and Horde'
+---
+
+All variant classes extend the base `Position` class and inherit its methods. Each variant implements specific rule modifications.
+
+## Crazyhouse
+
+Crazyhouse is a variant where captured pieces can be dropped back onto the board.
+
+### Key Differences from Chess
+
+- Captured pieces go into the captor's pocket
+- Pieces can be dropped on empty squares instead of moving
+- Promoted pieces demote to pawns when captured
+- Pawns cannot be dropped on the first or eighth rank
+
+### Static Methods
+
+#### Crazyhouse.default()
+
+Creates a new Crazyhouse position with the standard starting position.
+
+<ResponseField name="default" type="Crazyhouse">
+  A new Crazyhouse position in the starting state with empty pockets
+</ResponseField>
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+
+const pos = Crazyhouse.default();
+console.log(pos.pockets?.white.pawn); // 0
+```
+
+#### Crazyhouse.fromSetup(setup)
+
+Creates a Crazyhouse position from a Setup object.
+
+<ParamField path="setup" type="Setup" required>
+  The position setup including optional pockets
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<Crazyhouse, PositionError>">
+  A Result containing either the valid Crazyhouse position or a PositionError
+</ResponseField>
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+import { Material } from 'chessops';
+
+const setup = {
+  board: Board.default(),
+  pockets: Material.empty(),
+  turn: 'white',
+  castlingRights: SquareSet.corners(),
+  epSquare: undefined,
+  halfmoves: 0,
+  fullmoves: 1
+};
+
+const result = Crazyhouse.fromSetup(setup);
+```
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="Crazyhouse">
+  A deep copy of the Crazyhouse position
+</ResponseField>
+
+#### dropDests(ctx?)
+
+Computes legal squares for dropping pieces from the pocket.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="dropDests" type="SquareSet">
+  Set of legal drop squares:
+  - All empty squares for non-pawns
+  - Empty squares excluding first/eighth ranks for pawns
+  - If in check, only squares that block the check
+</ResponseField>
+
+```typescript
+const pos = Crazyhouse.default();
+// After some captures...
+if (pos.pockets && pos.pockets[pos.turn].knight > 0) {
+  const dropSquares = pos.dropDests();
+  console.log(`Can drop knight on ${dropSquares.size()} squares`);
+}
+```
+
+#### hasInsufficientMaterial(color)
+
+Crazyhouse-specific insufficient material check.
+
+<ParamField path="color" type="Color" required>
+  The color to check
+</ParamField>
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `true` only if total pieces (board + pockets) ≤ 3 and no pawns/rooks/queens exist
+</ResponseField>
+
+```typescript
+const pos = Crazyhouse.default();
+// Extremely rare in Crazyhouse due to drops
+if (pos.hasInsufficientMaterial('white')) {
+  console.log('White cannot win');
+}
+```
+
+### Playing Drops
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+
+const pos = Crazyhouse.default();
+// After capturing a knight...
+if (pos.pockets && pos.pockets.white.knight > 0) {
+  const dropMove = { role: 'knight', to: 42 }; // Drop knight on c6
+  if (pos.isLegal(dropMove)) {
+    pos.play(dropMove);
+    console.log(pos.pockets.white.knight); // Decremented by 1
+  }
+}
+```
+
+---
+
+## Atomic
+
+In Atomic chess, captures cause explosions that destroy surrounding pieces (except pawns).
+
+### Key Differences from Chess
+
+- Captures explode the capturing piece, captured piece, and all non-pawn pieces on adjacent squares
+- Kings cannot capture or be adjacent to each other
+- Exploding the opponent's king wins immediately
+- Your own king can be missing (already exploded)
+
+### Static Methods
+
+#### Atomic.default()
+
+<ResponseField name="default" type="Atomic">
+  A new Atomic position in the standard starting state
+</ResponseField>
+
+```typescript
+import { Atomic } from 'chessops/variant';
+
+const pos = Atomic.default();
+```
+
+#### Atomic.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<Atomic, PositionError>">
+  A Result containing either the valid Atomic position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="Atomic">
+  A deep copy of the Atomic position
+</ResponseField>
+
+#### kingAttackers(square, attacker, occupied)
+
+Atomic-specific attack detection that prevents kings from attacking.
+
+<ParamField path="square" type="Square" required>
+  The square being attacked
+</ParamField>
+
+<ParamField path="attacker" type="Color" required>
+  The attacking color
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  The set of occupied squares
+</ParamField>
+
+<ResponseField name="kingAttackers" type="SquareSet">
+  Set of pieces attacking the square (empty if attacker's king is adjacent, since kings cannot capture)
+</ResponseField>
+
+#### dests(square, ctx?)
+
+Computes legal moves with Atomic explosion rules.
+
+<ResponseField name="dests" type="SquareSet">
+  Legal moves excluding those that would expose your own king to explosion
+</ResponseField>
+
+```typescript
+const pos = Atomic.default();
+const dests = pos.dests(12); // e2 pawn
+// Moves that would explode your own king are excluded
+```
+
+#### hasInsufficientMaterial(color)
+
+Atomic-specific insufficient material rules.
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `false` if opponent's king is exploded or if side has enough material to force explosions
+</ResponseField>
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if either king has been exploded
+</ResponseField>
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  `{ winner: Color }` if opponent's king exploded, otherwise `undefined`
+</ResponseField>
+
+```typescript
+const pos = Atomic.default();
+// After an explosion...
+const outcome = pos.variantOutcome();
+if (outcome && outcome.winner) {
+  console.log(`${outcome.winner} wins by king explosion!`);
+}
+```
+
+---
+
+## Antichess
+
+In Antichess (also called Losing Chess), the goal is to lose all your pieces or be stalemated.
+
+### Key Differences from Chess
+
+- Captures are mandatory (must capture if possible)
+- Kings are normal pieces (no check, checkmate, or castling)
+- Winning condition: lose all pieces or get stalemated
+- Pawns can promote to kings
+
+### Static Methods
+
+#### Antichess.default()
+
+<ResponseField name="default" type="Antichess">
+  A new Antichess position (no castling rights)
+</ResponseField>
+
+```typescript
+import { Antichess } from 'chessops/variant';
+
+const pos = Antichess.default();
+console.log(pos.castles.castlingRights.isEmpty()); // true (no castling)
+```
+
+#### Antichess.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<Antichess, PositionError>">
+  A Result containing either the valid Antichess position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="Antichess">
+  A deep copy of the Antichess position
+</ResponseField>
+
+#### kingAttackers(square, attacker, occupied)
+
+<ResponseField name="kingAttackers" type="SquareSet">
+  Always returns an empty set (no check in Antichess)
+</ResponseField>
+
+#### ctx()
+
+Computes context including mandatory capture detection.
+
+<ResponseField name="ctx" type="Context">
+  Context with `mustCapture: true` if any capture is available
+</ResponseField>
+
+```typescript
+const pos = Antichess.default();
+const ctx = pos.ctx();
+if (ctx.mustCapture) {
+  console.log('Must capture!');
+}
+```
+
+#### dests(square, ctx?)
+
+Computes legal moves, restricting to captures if mandatory.
+
+<ResponseField name="dests" type="SquareSet">
+  Only capture moves if `ctx.mustCapture` is true, otherwise all pseudo-legal moves
+</ResponseField>
+
+```typescript
+const pos = Antichess.default();
+const ctx = pos.ctx();
+if (ctx.mustCapture) {
+  const dests = pos.dests(someSquare, ctx);
+  // Only contains captures
+}
+```
+
+#### hasInsufficientMaterial(color)
+
+Antichess-specific insufficient material (very complex due to inverted goal).
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `true` if the side cannot force losing all pieces
+</ResponseField>
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if the current player has no pieces left
+</ResponseField>
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  `{ winner: currentPlayer }` if they have no pieces or are stalemated
+</ResponseField>
+
+```typescript
+const pos = Antichess.default();
+if (pos.board[pos.turn].isEmpty()) {
+  const outcome = pos.variantOutcome();
+  console.log(`${outcome?.winner} wins by losing all pieces!`);
+}
+```
+
+---
+
+## King of the Hill
+
+Win by getting your king to one of the four center squares.
+
+### Key Differences from Chess
+
+- Win condition: king reaches d4, e4, d5, or e5
+- No insufficient material draws (king can always reach center)
+
+### Static Methods
+
+#### KingOfTheHill.default()
+
+<ResponseField name="default" type="KingOfTheHill">
+  A new King of the Hill position
+</ResponseField>
+
+```typescript
+import { KingOfTheHill } from 'chessops/variant';
+
+const pos = KingOfTheHill.default();
+```
+
+#### KingOfTheHill.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<KingOfTheHill, PositionError>">
+  A Result containing either the valid King of the Hill position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="KingOfTheHill">
+  A deep copy of the King of the Hill position
+</ResponseField>
+
+#### hasInsufficientMaterial(color)
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  Always returns `false` (king can always try to reach center)
+</ResponseField>
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if any king is on a center square (d4, e4, d5, e5)
+</ResponseField>
+
+```typescript
+const pos = KingOfTheHill.default();
+if (pos.isVariantEnd()) {
+  console.log('A king has reached the center!');
+}
+```
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  `{ winner: Color }` if that color's king is on a center square
+</ResponseField>
+
+```typescript
+const pos = KingOfTheHill.default();
+const outcome = pos.variantOutcome();
+if (outcome) {
+  console.log(`${outcome.winner} wins by reaching the center!`);
+}
+```
+
+---
+
+## Three-Check
+
+Win by checking the opponent's king three times.
+
+### Key Differences from Chess
+
+- Each check is counted and tracked
+- Win condition: give check 3 times or checkmate
+- Insufficient material: only bare king
+
+### Static Methods
+
+#### ThreeCheck.default()
+
+<ResponseField name="default" type="ThreeCheck">
+  A new Three-Check position with 3 remaining checks for each side
+</ResponseField>
+
+```typescript
+import { ThreeCheck } from 'chessops/variant';
+
+const pos = ThreeCheck.default();
+console.log(pos.remainingChecks?.white); // 3
+console.log(pos.remainingChecks?.black); // 3
+```
+
+#### ThreeCheck.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup including optional remainingChecks
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<ThreeCheck, PositionError>">
+  A Result containing either the valid Three-Check position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="ThreeCheck">
+  A deep copy of the Three-Check position
+</ResponseField>
+
+#### hasInsufficientMaterial(color)
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `true` only if the side has only a king (cannot give check)
+</ResponseField>
+
+```typescript
+const pos = ThreeCheck.default();
+if (pos.hasInsufficientMaterial('white')) {
+  console.log('White has only the king and cannot check');
+}
+```
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if either side has 0 remaining checks
+</ResponseField>
+
+```typescript
+const pos = ThreeCheck.default();
+if (pos.remainingChecks && pos.remainingChecks.white === 0) {
+  console.log('White has given 3 checks!');
+}
+```
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  `{ winner: Color }` if that color has given 3 checks
+</ResponseField>
+
+```typescript
+const pos = ThreeCheck.default();
+// After giving checks...
+const outcome = pos.variantOutcome();
+if (outcome) {
+  console.log(`${outcome.winner} wins by three checks!`);
+}
+```
+
+### Tracking Checks
+
+Checks are automatically decremented when `play()` is called:
+
+```typescript
+const pos = ThreeCheck.default();
+console.log(pos.remainingChecks?.white); // 3
+
+// Play moves that give check...
+pos.play(someCheckingMove);
+if (pos.isCheck()) {
+  console.log(pos.remainingChecks?.white); // 2 (decremented after black's turn)
+}
+```
+
+---
+
+## Racing Kings
+
+Both sides race to get their king to the eighth rank. No checks allowed.
+
+### Key Differences from Chess
+
+- Custom starting position (both sides start on ranks 1-2)
+- No pawns in starting position
+- Cannot give check
+- Win condition: king reaches rank 8 first
+- If white reaches rank 8, black gets one more move to tie
+- No castling
+
+### Static Methods
+
+#### RacingKings.default()
+
+<ResponseField name="default" type="RacingKings">
+  A new Racing Kings position with the standard starting layout
+</ResponseField>
+
+```typescript
+import { RacingKings } from 'chessops/variant';
+
+const pos = RacingKings.default();
+console.log(pos.board.pawn.isEmpty()); // true (no pawns)
+```
+
+#### RacingKings.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup (must not have pawns or checks)
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<RacingKings, PositionError>">
+  A Result containing either the valid Racing Kings position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="RacingKings">
+  A deep copy of the Racing Kings position
+</ResponseField>
+
+#### dests(square, ctx?)
+
+Computes legal moves excluding moves that give check.
+
+<ResponseField name="dests" type="SquareSet">
+  Legal moves that don't put the opponent in check
+</ResponseField>
+
+```typescript
+const pos = RacingKings.default();
+const dests = pos.dests(kingSquare);
+// King can move freely, but cannot give check
+```
+
+#### hasInsufficientMaterial(color)
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  Always returns `false` (king can always race to rank 8)
+</ResponseField>
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if a king has reached rank 8, considering black's catch-up opportunity
+</ResponseField>
+
+```typescript
+const pos = RacingKings.default();
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  console.log('Race finished!');
+}
+```
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  - `{ winner: 'white' }` if only white reached rank 8
+  - `{ winner: 'black' }` if only black reached rank 8
+  - `{ winner: undefined }` if both reached rank 8 (draw)
+  - `undefined` if game continues
+</ResponseField>
+
+```typescript
+const pos = RacingKings.default();
+const outcome = pos.variantOutcome();
+if (outcome) {
+  if (outcome.winner) {
+    console.log(`${outcome.winner} won the race!`);
+  } else {
+    console.log('Both kings reached rank 8 - Draw!');
+  }
+}
+```
+
+---
+
+## Horde
+
+White has a horde of pawns instead of regular pieces. Black plays normally.
+
+### Key Differences from Chess
+
+- Custom starting position: White has 36 pawns, black has normal pieces
+- White has no king
+- White wins by capturing all black pieces
+- Black wins by capturing all white pieces or checkmating the white king (if custom position)
+- White cannot castle (no king)
+- Complex insufficient material rules
+
+### Static Methods
+
+#### Horde.default()
+
+<ResponseField name="default" type="Horde">
+  A new Horde position with the standard starting layout (36 white pawns vs normal black pieces)
+</ResponseField>
+
+```typescript
+import { Horde } from 'chessops/variant';
+
+const pos = Horde.default();
+console.log(pos.board.white.size()); // 36 (all pawns)
+console.log(pos.board.kingOf('white')); // undefined
+```
+
+#### Horde.fromSetup(setup)
+
+<ParamField path="setup" type="Setup" required>
+  The position setup (must have exactly 0 or 1 kings total)
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<Horde, PositionError>">
+  A Result containing either the valid Horde position or a PositionError
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+<ResponseField name="clone" type="Horde">
+  A deep copy of the Horde position
+</ResponseField>
+
+#### hasInsufficientMaterial(color)
+
+Extremely complex insufficient material rules specific to Horde.
+
+<ParamField path="color" type="Color" required>
+  The color to check
+</ParamField>
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `false` if the side with the king can capture the horde
+  
+  For the horde side (no king), analyzes complex mating patterns based on:
+  - Number of pieces in the horde
+  - Piece types and square colors
+  - Opponent's pieces and their configuration
+</ResponseField>
+
+```typescript
+const pos = Horde.default();
+// The horde must be very depleted for insufficient material
+if (pos.hasInsufficientMaterial('white')) {
+  console.log('Horde cannot win');
+}
+```
+
+#### isVariantEnd()
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if either white or black has no pieces left
+</ResponseField>
+
+#### variantOutcome(ctx?)
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  - `{ winner: 'black' }` if white (horde) has no pieces
+  - `{ winner: 'white' }` if black has no pieces
+  - `undefined` if game continues
+</ResponseField>
+
+```typescript
+const pos = Horde.default();
+if (pos.board.white.isEmpty()) {
+  const outcome = pos.variantOutcome();
+  console.log('Black wins by capturing the entire horde!');
+}
+```
+
+---
+
+## Utility Functions
+
+### defaultPosition(rules)
+
+Creates a default position for any variant.
+
+<ParamField path="rules" type="Rules" required>
+  The variant rules: `'chess'`, `'atomic'`, `'crazyhouse'`, `'antichess'`, `'kingofthehill'`, `'3check'`, `'racingkings'`, `'horde'`
+</ParamField>
+
+<ResponseField name="defaultPosition" type="Position">
+  A new position in the default starting state for the variant
+</ResponseField>
+
+```typescript
+import { defaultPosition } from 'chessops/variant';
+
+const chess = defaultPosition('chess');
+const atomic = defaultPosition('atomic');
+const crazyhouse = defaultPosition('crazyhouse');
+```
+
+### setupPosition(rules, setup)
+
+Creates a position from a setup for any variant.
+
+<ParamField path="rules" type="Rules" required>
+  The variant rules
+</ParamField>
+
+<ParamField path="setup" type="Setup" required>
+  The position setup to load
+</ParamField>
+
+<ResponseField name="setupPosition" type="Result<Position, PositionError>">
+  A Result containing either the valid position or a PositionError
+</ResponseField>
+
+```typescript
+import { setupPosition } from 'chessops/variant';
+
+const result = setupPosition('atomic', mySetup);
+if (result.isOk) {
+  const pos = result.value;
+  console.log(`Created ${pos.rules} position`);
+}
+```
+
+### isStandardMaterial(pos)
+
+Checks if a position has standard material for its variant.
+
+<ParamField path="pos" type="Position" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="isStandardMaterial" type="boolean">
+  `true` if the material is standard for the variant:
+  - Chess/Atomic/Antichess/King of the Hill/Three-Check: No promoted pieces beyond starting material
+  - Crazyhouse: Accounts for promoted pieces and pockets
+  - Horde: White ≤ 36 pieces, black has standard material if they have a king
+  - Racing Kings: Each side has ≤ 2 rooks, 2 bishops, 2 knights, 1 queen
+</ResponseField>
+
+```typescript
+import { isStandardMaterial } from 'chessops/variant';
+
+const pos = Atomic.default();
+console.log(isStandardMaterial(pos)); // true
+```
+
+---
+
+## Variant Comparison
+
+| Variant | Starting Position | Win Condition | Special Rules |
+|---------|------------------|---------------|---------------|
+| **Chess** | Standard | Checkmate | Castling, en passant |
+| **Crazyhouse** | Standard | Checkmate | Drop captured pieces |
+| **Atomic** | Standard | King explosion | Captures explode |
+| **Antichess** | Standard | Lose all pieces | Mandatory captures, no check |
+| **King of the Hill** | Standard | King to center | Reach d4/e4/d5/e5 |
+| **Three-Check** | Standard | 3 checks or checkmate | Count checks |
+| **Racing Kings** | Custom (no pawns) | King to rank 8 | No checks allowed |
+| **Horde** | Custom (36 white pawns) | Capture all pieces | White has no king |
+
+## Example: Working with Multiple Variants
+
+```typescript
+import { defaultPosition, setupPosition } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+function analyzePosition(rules: Rules, fen: string) {
+  const setup = parseFen(fen).unwrap();
+  const result = setupPosition(rules, setup);
+  
+  if (result.isErr) {
+    console.error(`Invalid ${rules} position:`, result.error.message);
+    return;
+  }
+  
+  const pos = result.value;
+  const ctx = pos.ctx();
+  
+  console.log(`${rules} position:`);
+  console.log(`Turn: ${pos.turn}`);
+  console.log(`In check: ${ctx.checkers.nonEmpty()}`);
+  console.log(`Legal moves: ${pos.allDests(ctx).size}`);
+  
+  if (pos.isVariantEnd()) {
+    const outcome = pos.variantOutcome(ctx);
+    console.log(`Variant ending: ${outcome?.winner || 'draw'}`);
+  }
+  
+  const outcome = pos.outcome(ctx);
+  if (outcome) {
+    console.log(`Game over: ${outcome.winner ? outcome.winner + ' wins' : 'draw'}`);
+  }
+}
+
+// Analyze different variants
+analyzePosition('chess', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+analyzePosition('atomic', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+analyzePosition('3check', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3+3 0 1');
+```

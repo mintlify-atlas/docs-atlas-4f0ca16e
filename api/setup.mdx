@@ -1,0 +1,856 @@
+---
+title: Setup, Material & Castles
+description: Chess position setup and material tracking
+---
+
+## Overview
+
+This module provides types and classes for representing chess position setups, material counts, and castling rights.
+
+```typescript
+import { defaultSetup, Material, Castles } from 'chessops';
+
+const setup = defaultSetup();
+const material = Material.fromBoard(setup.board);
+console.log('Total pieces:', material.size());
+```
+
+## Setup
+
+Represents a complete (not necessarily legal) chess or chess variant position.
+
+### Interface
+
+```typescript
+interface Setup {
+  board: Board;
+  pockets: Material | undefined;
+  turn: Color;
+  castlingRights: SquareSet;
+  epSquare: Square | undefined;
+  remainingChecks: RemainingChecks | undefined;
+  halfmoves: number;
+  fullmoves: number;
+}
+```
+
+<ResponseField name="board" type="Board">
+  The board with piece positions
+</ResponseField>
+
+<ResponseField name="pockets" type="Material | undefined">
+  Pieces in hand (for variants like Crazyhouse). Undefined for standard chess.
+</ResponseField>
+
+<ResponseField name="turn" type="Color">
+  The side to move ('white' or 'black')
+</ResponseField>
+
+<ResponseField name="castlingRights" type="SquareSet">
+  Squares of rooks that still have castling rights
+</ResponseField>
+
+<ResponseField name="epSquare" type="Square | undefined">
+  The en passant target square, if any
+</ResponseField>
+
+<ResponseField name="remainingChecks" type="RemainingChecks | undefined">
+  Remaining checks for Three-Check variant. Undefined for standard chess.
+</ResponseField>
+
+<ResponseField name="halfmoves" type="number">
+  Halfmove clock for the fifty-move rule
+</ResponseField>
+
+<ResponseField name="fullmoves" type="number">
+  Fullmove number, starting at 1 and incremented after Black's move
+</ResponseField>
+
+### Factory Functions
+
+#### defaultSetup
+
+```typescript
+defaultSetup(): Setup
+```
+
+Creates a setup with the standard chess starting position.
+
+```typescript
+import { defaultSetup } from 'chessops';
+
+const setup = defaultSetup();
+console.log(setup.turn); // 'white'
+console.log(setup.fullmoves); // 1
+```
+
+#### emptySetup
+
+```typescript
+emptySetup(): Setup
+```
+
+Creates a setup with an empty board.
+
+```typescript
+import { emptySetup } from 'chessops';
+
+const setup = emptySetup();
+console.log(setup.board.occupied.isEmpty()); // true
+```
+
+### Utility Functions
+
+#### setupClone
+
+```typescript
+setupClone(setup: Setup): Setup
+```
+
+Creates a deep copy of a setup.
+
+<ParamField path="setup" type="Setup" required>
+  The setup to clone
+</ParamField>
+
+```typescript
+import { setupClone } from 'chessops';
+
+const original = defaultSetup();
+const copy = setupClone(original);
+
+// Modifications to copy don't affect original
+copy.turn = 'black';
+console.log(original.turn); // 'white'
+```
+
+#### setupEquals
+
+```typescript
+setupEquals(left: Setup, right: Setup): boolean
+```
+
+Compares two setups for equality.
+
+<ParamField path="left" type="Setup" required>
+  First setup to compare
+</ParamField>
+
+<ParamField path="right" type="Setup" required>
+  Second setup to compare
+</ParamField>
+
+```typescript
+import { setupEquals, defaultSetup } from 'chessops';
+
+const setup1 = defaultSetup();
+const setup2 = defaultSetup();
+
+if (setupEquals(setup1, setup2)) {
+  console.log('Setups are identical');
+}
+```
+
+## MaterialSide
+
+Represents material count for one side.
+
+### Properties
+
+<ResponseField name="pawn" type="number">
+  Number of pawns
+</ResponseField>
+
+<ResponseField name="knight" type="number">
+  Number of knights
+</ResponseField>
+
+<ResponseField name="bishop" type="number">
+  Number of bishops
+</ResponseField>
+
+<ResponseField name="rook" type="number">
+  Number of rooks
+</ResponseField>
+
+<ResponseField name="queen" type="number">
+  Number of queens
+</ResponseField>
+
+<ResponseField name="king" type="number">
+  Number of kings
+</ResponseField>
+
+### Static Methods
+
+#### empty
+
+```typescript
+static empty(): MaterialSide
+```
+
+Creates an empty material side with all pieces set to 0.
+
+```typescript
+import { MaterialSide } from 'chessops';
+
+const material = MaterialSide.empty();
+console.log(material.pawn); // 0
+```
+
+#### fromBoard
+
+```typescript
+static fromBoard(board: Board, color: Color): MaterialSide
+```
+
+Creates a material side from a board for the given color.
+
+<ParamField path="board" type="Board" required>
+  The board to count pieces from
+</ParamField>
+
+<ParamField path="color" type="Color" required>
+  The color to count pieces for
+</ParamField>
+
+```typescript
+import { MaterialSide, Board } from 'chessops';
+
+const board = Board.default();
+const whiteMaterial = MaterialSide.fromBoard(board, 'white');
+console.log(whiteMaterial.pawn); // 8
+```
+
+### Instance Methods
+
+#### clone
+
+```typescript
+clone(): MaterialSide
+```
+
+Creates a copy of the material side.
+
+```typescript
+const copy = material.clone();
+```
+
+#### equals
+
+```typescript
+equals(other: MaterialSide): boolean
+```
+
+Compares two material sides for equality.
+
+<ParamField path="other" type="MaterialSide" required>
+  The other material side to compare
+</ParamField>
+
+```typescript
+if (material1.equals(material2)) {
+  console.log('Same material');
+}
+```
+
+#### add
+
+```typescript
+add(other: MaterialSide): MaterialSide
+```
+
+Adds another material side to this one.
+
+<ParamField path="other" type="MaterialSide" required>
+  The material to add
+</ParamField>
+
+```typescript
+const total = material1.add(material2);
+```
+
+#### subtract
+
+```typescript
+subtract(other: MaterialSide): MaterialSide
+```
+
+Subtracts another material side from this one.
+
+<ParamField path="other" type="MaterialSide" required>
+  The material to subtract
+</ParamField>
+
+```typescript
+const difference = material1.subtract(material2);
+```
+
+#### size
+
+```typescript
+size(): number
+```
+
+Returns the total number of pieces.
+
+```typescript
+const totalPieces = material.size();
+```
+
+#### isEmpty
+
+```typescript
+isEmpty(): boolean
+```
+
+Checks if there are no pieces.
+
+```typescript
+if (material.isEmpty()) {
+  console.log('No pieces');
+}
+```
+
+#### nonEmpty
+
+```typescript
+nonEmpty(): boolean
+```
+
+Checks if there is at least one piece.
+
+```typescript
+if (material.nonEmpty()) {
+  console.log('Has pieces');
+}
+```
+
+#### hasPawns
+
+```typescript
+hasPawns(): boolean
+```
+
+Checks if there are any pawns.
+
+```typescript
+if (material.hasPawns()) {
+  console.log('Has pawns');
+}
+```
+
+#### hasNonPawns
+
+```typescript
+hasNonPawns(): boolean
+```
+
+Checks if there are any pieces other than pawns.
+
+```typescript
+if (material.hasNonPawns()) {
+  console.log('Has pieces other than pawns');
+}
+```
+
+## Material
+
+Represents material count for both sides.
+
+### Constructor
+
+```typescript
+constructor(white: MaterialSide, black: MaterialSide)
+```
+
+<ParamField path="white" type="MaterialSide" required>
+  Material for white
+</ParamField>
+
+<ParamField path="black" type="MaterialSide" required>
+  Material for black
+</ParamField>
+
+### Properties
+
+<ResponseField name="white" type="MaterialSide">
+  White's material
+</ResponseField>
+
+<ResponseField name="black" type="MaterialSide">
+  Black's material
+</ResponseField>
+
+### Static Methods
+
+#### empty
+
+```typescript
+static empty(): Material
+```
+
+Creates empty material for both sides.
+
+```typescript
+import { Material } from 'chessops';
+
+const material = Material.empty();
+```
+
+#### fromBoard
+
+```typescript
+static fromBoard(board: Board): Material
+```
+
+Creates material from a board.
+
+<ParamField path="board" type="Board" required>
+  The board to count pieces from
+</ParamField>
+
+```typescript
+import { Material, Board } from 'chessops';
+
+const board = Board.default();
+const material = Material.fromBoard(board);
+console.log('White pawns:', material.white.pawn);
+console.log('Black pawns:', material.black.pawn);
+```
+
+### Instance Methods
+
+#### clone
+
+```typescript
+clone(): Material
+```
+
+Creates a copy of the material.
+
+```typescript
+const copy = material.clone();
+```
+
+#### equals
+
+```typescript
+equals(other: Material): boolean
+```
+
+Compares two materials for equality.
+
+<ParamField path="other" type="Material" required>
+  The other material to compare
+</ParamField>
+
+```typescript
+if (material1.equals(material2)) {
+  console.log('Same material');
+}
+```
+
+#### add
+
+```typescript
+add(other: Material): Material
+```
+
+Adds another material to this one.
+
+<ParamField path="other" type="Material" required>
+  The material to add
+</ParamField>
+
+```typescript
+const total = material1.add(material2);
+```
+
+#### subtract
+
+```typescript
+subtract(other: Material): Material
+```
+
+Subtracts another material from this one.
+
+<ParamField path="other" type="Material" required>
+  The material to subtract
+</ParamField>
+
+```typescript
+const difference = material1.subtract(material2);
+```
+
+#### count
+
+```typescript
+count(role: Role): number
+```
+
+Returns the total count of a piece role across both colors.
+
+<ParamField path="role" type="Role" required>
+  The piece role to count
+</ParamField>
+
+```typescript
+const totalQueens = material.count('queen');
+```
+
+#### size
+
+```typescript
+size(): number
+```
+
+Returns the total number of pieces for both sides.
+
+```typescript
+const totalPieces = material.size();
+```
+
+#### isEmpty
+
+```typescript
+isEmpty(): boolean
+```
+
+Checks if both sides have no pieces.
+
+```typescript
+if (material.isEmpty()) {
+  console.log('No pieces on board');
+}
+```
+
+#### nonEmpty
+
+```typescript
+nonEmpty(): boolean
+```
+
+Checks if at least one side has pieces.
+
+```typescript
+if (material.nonEmpty()) {
+  console.log('Has pieces');
+}
+```
+
+#### hasPawns
+
+```typescript
+hasPawns(): boolean
+```
+
+Checks if either side has pawns.
+
+```typescript
+if (material.hasPawns()) {
+  console.log('Pawns are present');
+}
+```
+
+#### hasNonPawns
+
+```typescript
+hasNonPawns(): boolean
+```
+
+Checks if either side has pieces other than pawns.
+
+```typescript
+if (material.hasNonPawns()) {
+  console.log('Has pieces other than pawns');
+}
+```
+
+## RemainingChecks
+
+Tracks remaining checks for the Three-Check variant.
+
+### Constructor
+
+```typescript
+constructor(white: number, black: number)
+```
+
+<ParamField path="white" type="number" required>
+  Remaining checks for white
+</ParamField>
+
+<ParamField path="black" type="number" required>
+  Remaining checks for black
+</ParamField>
+
+### Properties
+
+<ResponseField name="white" type="number">
+  Number of remaining checks white can give
+</ResponseField>
+
+<ResponseField name="black" type="number">
+  Number of remaining checks black can give
+</ResponseField>
+
+### Static Methods
+
+#### default
+
+```typescript
+static default(): RemainingChecks
+```
+
+Creates default remaining checks (3 for each side).
+
+```typescript
+import { RemainingChecks } from 'chessops';
+
+const checks = RemainingChecks.default();
+console.log(checks.white); // 3
+console.log(checks.black); // 3
+```
+
+### Instance Methods
+
+#### clone
+
+```typescript
+clone(): RemainingChecks
+```
+
+Creates a copy of the remaining checks.
+
+```typescript
+const copy = checks.clone();
+```
+
+#### equals
+
+```typescript
+equals(other: RemainingChecks): boolean
+```
+
+Compares two remaining checks for equality.
+
+<ParamField path="other" type="RemainingChecks" required>
+  The other remaining checks to compare
+</ParamField>
+
+```typescript
+if (checks1.equals(checks2)) {
+  console.log('Same check counts');
+}
+```
+
+## Castles
+
+Tracks castling rights and paths.
+
+### Properties
+
+<ResponseField name="castlingRights" type="SquareSet">
+  Squares of rooks that still have castling rights
+</ResponseField>
+
+<ResponseField name="rook" type="ByColor<ByCastlingSide<Square | undefined>>">
+  Rook positions for castling, organized by color and side
+</ResponseField>
+
+<ResponseField name="path" type="ByColor<ByCastlingSide<SquareSet>>">
+  Squares that must be empty for castling, organized by color and side
+</ResponseField>
+
+### Static Methods
+
+#### default
+
+```typescript
+static default(): Castles
+```
+
+Creates castles with standard chess castling rights.
+
+```typescript
+import { Castles } from 'chessops/chess';
+
+const castles = Castles.default();
+console.log(castles.castlingRights.size()); // 4 (rooks on a1, h1, a8, h8)
+```
+
+#### empty
+
+```typescript
+static empty(): Castles
+```
+
+Creates castles with no castling rights.
+
+```typescript
+const castles = Castles.empty();
+console.log(castles.castlingRights.isEmpty()); // true
+```
+
+#### fromSetup
+
+```typescript
+static fromSetup(setup: Setup): Castles
+```
+
+Creates castles from a setup, inferring rook positions from castling rights.
+
+<ParamField path="setup" type="Setup" required>
+  The setup to create castles from
+</ParamField>
+
+```typescript
+import { Castles } from 'chessops/chess';
+import { defaultSetup } from 'chessops';
+
+const setup = defaultSetup();
+const castles = Castles.fromSetup(setup);
+```
+
+### Instance Methods
+
+#### clone
+
+```typescript
+clone(): Castles
+```
+
+Creates a copy of the castles.
+
+```typescript
+const copy = castles.clone();
+```
+
+#### discardRook
+
+```typescript
+discardRook(square: Square): void
+```
+
+Removes castling rights for the rook on the given square.
+
+<ParamField path="square" type="Square" required>
+  The square of the rook to discard
+</ParamField>
+
+```typescript
+castles.discardRook(0); // Remove castling rights for a1
+```
+
+#### discardColor
+
+```typescript
+discardColor(color: Color): void
+```
+
+Removes all castling rights for the given color.
+
+<ParamField path="color" type="Color" required>
+  The color to remove castling rights for
+</ParamField>
+
+```typescript
+castles.discardColor('white'); // Remove all white castling rights
+```
+
+## Examples
+
+### Working with Setups
+
+```typescript
+import { defaultSetup, setupClone } from 'chessops';
+import { makeFen } from 'chessops/fen';
+
+const setup = defaultSetup();
+
+// Modify the setup
+setup.turn = 'black';
+setup.halfmoves = 5;
+setup.fullmoves = 3;
+
+// Convert to FEN
+const fen = makeFen(setup);
+console.log(fen);
+
+// Clone before modifying
+const copy = setupClone(setup);
+copy.turn = 'white';
+```
+
+### Material Analysis
+
+```typescript
+import { Material, Board } from 'chessops';
+
+const board = Board.default();
+const material = Material.fromBoard(board);
+
+console.log('White pieces:');
+console.log('  Pawns:', material.white.pawn);
+console.log('  Knights:', material.white.knight);
+console.log('  Bishops:', material.white.bishop);
+console.log('  Rooks:', material.white.rook);
+console.log('  Queens:', material.white.queen);
+console.log('  Kings:', material.white.king);
+
+console.log('Total pieces:', material.size());
+console.log('Total queens:', material.count('queen'));
+```
+
+### Material Difference
+
+```typescript
+import { Material, Board } from 'chessops';
+
+const board = Board.default();
+
+// Remove some pieces
+board.take(8);  // Remove a white pawn
+board.take(12); // Remove another white pawn
+
+const current = Material.fromBoard(board);
+const starting = Material.fromBoard(Board.default());
+
+const difference = starting.subtract(current);
+console.log('Captured white pawns:', difference.white.pawn);
+```
+
+### Castling Rights Management
+
+```typescript
+import { Castles } from 'chessops/chess';
+import { defaultSetup } from 'chessops';
+
+const castles = Castles.fromSetup(defaultSetup());
+
+console.log('White can castle queenside:', castles.rook.white.a !== undefined);
+console.log('White can castle kingside:', castles.rook.white.h !== undefined);
+
+// Remove castling right when king moves
+castles.discardColor('white');
+
+console.log('White castling rights:', castles.rook.white.a); // undefined
+```
+
+### Three-Check Variant
+
+```typescript
+import { RemainingChecks } from 'chessops';
+
+const checks = RemainingChecks.default();
+
+// After white gives a check
+checks.white = Math.max(checks.white - 1, 0);
+
+console.log('White remaining checks:', checks.white);
+
+if (checks.white === 0) {
+  console.log('White wins by three checks!');
+}
+```

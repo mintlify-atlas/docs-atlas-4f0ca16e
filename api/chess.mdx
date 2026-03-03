@@ -1,0 +1,846 @@
+---
+title: 'Position & Chess'
+description: 'Core position and rules classes for standard chess'
+---
+
+## Position
+
+Abstract base class representing a chess position. All chess variants extend this class.
+
+### Properties
+
+<ParamField path="board" type="Board">
+  The current board state containing piece positions
+</ParamField>
+
+<ParamField path="pockets" type="Material | undefined">
+  Captured pieces available for dropping (used in Crazyhouse variant)
+</ParamField>
+
+<ParamField path="turn" type="Color">
+  The side to move (`'white'` or `'black'`)
+</ParamField>
+
+<ParamField path="castles" type="Castles">
+  Castling rights and rook positions for both sides
+</ParamField>
+
+<ParamField path="epSquare" type="Square | undefined">
+  En passant target square, if available
+</ParamField>
+
+<ParamField path="remainingChecks" type="RemainingChecks | undefined">
+  Remaining checks for both sides (used in 3check variant)
+</ParamField>
+
+<ParamField path="halfmoves" type="number">
+  Number of halfmoves since last capture or pawn move (for 50-move rule)
+</ParamField>
+
+<ParamField path="fullmoves" type="number">
+  Current move number (increments after black's move)
+</ParamField>
+
+<ParamField path="rules" type="Rules" required>
+  The variant rules being used (`'chess'`, `'atomic'`, `'crazyhouse'`, etc.)
+</ParamField>
+
+### Methods
+
+#### reset()
+
+Resets the position to the starting position for the variant.
+
+```typescript
+const pos = Chess.default();
+pos.play({ from: 12, to: 28 }); // e2-e4
+pos.reset(); // Back to starting position
+```
+
+#### clone()
+
+Creates a deep copy of the position.
+
+<ResponseField name="clone" type="Position">
+  A new position instance with identical state
+</ResponseField>
+
+```typescript
+const original = Chess.default();
+const copy = original.clone();
+copy.play({ from: 12, to: 28 }); // Doesn't affect original
+```
+
+#### ctx()
+
+Computes the current position context including checks, pins, and variant-specific state.
+
+<ResponseField name="ctx" type="Context">
+  Position context containing:
+  - `king`: The current player's king square
+  - `blockers`: Pieces pinned to the king
+  - `checkers`: Pieces giving check
+  - `variantEnd`: Whether the variant ending condition is met
+  - `mustCapture`: Whether a capture is mandatory (Antichess)
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const ctx = pos.ctx();
+if (ctx.checkers.nonEmpty()) {
+  console.log('King is in check!');
+}
+```
+
+#### dests(square, ctx?)
+
+Computes legal destination squares for a piece.
+
+<ParamField path="square" type="Square" required>
+  The square containing the piece to move
+</ParamField>
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context (performance optimization)
+</ParamField>
+
+<ResponseField name="dests" type="SquareSet">
+  Set of legal destination squares
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const e2Dests = pos.dests(12); // Square 12 is e2
+for (const dest of e2Dests) {
+  console.log(`Can move to square ${dest}`);
+}
+```
+
+#### dropDests(ctx?)
+
+Computes legal squares for dropping pieces (Crazyhouse variant).
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="dropDests" type="SquareSet">
+  Set of legal drop squares (empty for standard chess)
+</ResponseField>
+
+```typescript
+const pos = Crazyhouse.default();
+if (pos.pockets && pos.pockets[pos.turn].pawn > 0) {
+  const dropSquares = pos.dropDests();
+  console.log(`Can drop pawn on ${dropSquares.size()} squares`);
+}
+```
+
+#### allDests(ctx?)
+
+Computes legal moves for all pieces of the current player.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="allDests" type="Map<Square, SquareSet>">
+  Map from piece squares to their legal destination squares
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const allMoves = pos.allDests();
+for (const [from, dests] of allMoves) {
+  console.log(`Piece on ${from} can move to ${dests.size()} squares`);
+}
+```
+
+#### isLegal(move, ctx?)
+
+Checks if a move is legal in the current position.
+
+<ParamField path="move" type="Move" required>
+  The move to validate (either `{ from, to, promotion? }` or `{ role, to }` for drops)
+</ParamField>
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="isLegal" type="boolean">
+  `true` if the move is legal, `false` otherwise
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const e4Move = { from: 12, to: 28 };
+if (pos.isLegal(e4Move)) {
+  pos.play(e4Move);
+}
+```
+
+#### play(move)
+
+Plays a move, updating the position. Does not validate legality.
+
+<ParamField path="move" type="Move" required>
+  The move to play
+</ParamField>
+
+```typescript
+const pos = Chess.default();
+pos.play({ from: 12, to: 28 }); // e2-e4
+pos.play({ from: 52, to: 36 }); // e7-e5
+console.log(pos.turn); // 'white'
+```
+
+<Warning>
+  `play()` does not validate move legality. Use `isLegal()` first or check with `dests()` to ensure valid moves.
+</Warning>
+
+#### isCheck()
+
+Checks if the current player is in check.
+
+<ResponseField name="isCheck" type="boolean">
+  `true` if the current player's king is under attack
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (pos.isCheck()) {
+  console.log('You must move out of check!');
+}
+```
+
+#### isCheckmate(ctx?)
+
+Checks if the current player is checkmated.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="isCheckmate" type="boolean">
+  `true` if the position is checkmate
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (pos.isCheckmate()) {
+  console.log(`${opposite(pos.turn)} wins by checkmate!`);
+}
+```
+
+#### isStalemate(ctx?)
+
+Checks if the current player is stalemated.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="isStalemate" type="boolean">
+  `true` if the position is stalemate
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (pos.isStalemate()) {
+  console.log('Draw by stalemate');
+}
+```
+
+#### isEnd(ctx?)
+
+Checks if the game has ended (checkmate, stalemate, insufficient material, or variant ending).
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="isEnd" type="boolean">
+  `true` if the game has ended
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+while (!pos.isEnd()) {
+  // Game continues
+}
+```
+
+#### isVariantEnd()
+
+Checks if the variant-specific ending condition is met.
+
+<ResponseField name="isVariantEnd" type="boolean">
+  `true` if variant ending condition is met (always `false` for standard chess)
+</ResponseField>
+
+```typescript
+const pos = Atomic.default();
+if (pos.isVariantEnd()) {
+  console.log('A king has been captured!');
+}
+```
+
+#### outcome(ctx?)
+
+Determines the game outcome.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="outcome" type="Outcome | undefined">
+  Game outcome: `{ winner: 'white' | 'black' | undefined }` or `undefined` if game continues
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const result = pos.outcome();
+if (result) {
+  if (result.winner) {
+    console.log(`${result.winner} wins!`);
+  } else {
+    console.log('Draw');
+  }
+}
+```
+
+#### variantOutcome(ctx?)
+
+Determines variant-specific outcome.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="variantOutcome" type="Outcome | undefined">
+  Variant outcome (always `undefined` for standard chess)
+</ResponseField>
+
+#### hasInsufficientMaterial(color)
+
+Checks if a side has insufficient mating material.
+
+<ParamField path="color" type="Color" required>
+  The color to check (`'white'` or `'black'`)
+</ParamField>
+
+<ResponseField name="hasInsufficientMaterial" type="boolean">
+  `true` if the side cannot possibly checkmate
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (pos.hasInsufficientMaterial('white') && pos.hasInsufficientMaterial('black')) {
+  console.log('Draw by insufficient material');
+}
+```
+
+#### isInsufficientMaterial()
+
+Checks if both sides have insufficient mating material.
+
+<ResponseField name="isInsufficientMaterial" type="boolean">
+  `true` if neither side can possibly checkmate
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (pos.isInsufficientMaterial()) {
+  console.log('Automatic draw');
+}
+```
+
+#### hasDests(ctx?)
+
+Checks if the current player has any legal moves.
+
+<ParamField path="ctx" type="Context">
+  Optional pre-computed context
+</ParamField>
+
+<ResponseField name="hasDests" type="boolean">
+  `true` if at least one legal move exists
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+if (!pos.hasDests()) {
+  console.log(pos.isCheck() ? 'Checkmate!' : 'Stalemate!');
+}
+```
+
+#### toSetup()
+
+Converts the position to a Setup object.
+
+<ResponseField name="toSetup" type="Setup">
+  Setup object containing all position data
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+pos.play({ from: 12, to: 28 });
+const setup = pos.toSetup();
+// Can recreate position later with Chess.fromSetup(setup)
+```
+
+#### kingAttackers(square, attacker, occupied)
+
+Finds all pieces of a color attacking a square.
+
+<ParamField path="square" type="Square" required>
+  The square being attacked
+</ParamField>
+
+<ParamField path="attacker" type="Color" required>
+  The attacking color
+</ParamField>
+
+<ParamField path="occupied" type="SquareSet" required>
+  The set of occupied squares
+</ParamField>
+
+<ResponseField name="kingAttackers" type="SquareSet">
+  Set of squares containing pieces attacking the target square
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+const king = pos.board.kingOf('white');
+if (king !== undefined) {
+  const attackers = pos.kingAttackers(king, 'black', pos.board.occupied);
+  console.log(`${attackers.size()} pieces attacking the king`);
+}
+```
+
+---
+
+## Chess
+
+Concrete implementation of standard chess rules.
+
+### Static Methods
+
+#### Chess.default()
+
+Creates a new position with the standard starting position.
+
+<ResponseField name="default" type="Chess">
+  A new chess position in the starting state
+</ResponseField>
+
+```typescript
+const pos = Chess.default();
+console.log(pos.turn); // 'white'
+console.log(pos.fullmoves); // 1
+```
+
+#### Chess.fromSetup(setup)
+
+Creates a chess position from a Setup object.
+
+<ParamField path="setup" type="Setup" required>
+  The position setup to validate and load
+</ParamField>
+
+<ResponseField name="fromSetup" type="Result<Chess, PositionError>">
+  A Result containing either the valid Chess position or a PositionError
+</ResponseField>
+
+```typescript
+import { Chess } from 'chessops';
+
+const setup = {
+  board: Board.default(),
+  turn: 'white',
+  castlingRights: SquareSet.corners(),
+  epSquare: undefined,
+  remainingChecks: undefined,
+  halfmoves: 0,
+  fullmoves: 1
+};
+
+const result = Chess.fromSetup(setup);
+if (result.isOk) {
+  const pos = result.value;
+  console.log('Valid position created');
+} else {
+  console.error('Invalid setup:', result.error.message);
+}
+```
+
+### Instance Methods
+
+#### clone()
+
+Creates a deep copy of the chess position.
+
+<ResponseField name="clone" type="Chess">
+  A new Chess instance with identical state
+</ResponseField>
+
+```typescript
+const original = Chess.default();
+const copy = original.clone();
+copy.play({ from: 12, to: 28 });
+console.log(original.turn); // 'white' (unchanged)
+console.log(copy.turn); // 'black'
+```
+
+---
+
+## Castles
+
+Manages castling rights and paths for both sides.
+
+### Properties
+
+<ParamField path="castlingRights" type="SquareSet">
+  Set of squares containing rooks that can castle
+</ParamField>
+
+<ParamField path="rook" type="ByColor<ByCastlingSide<Square | undefined>>">
+  Rook positions for each side and color: `{ white: { a: 0, h: 7 }, black: { a: 56, h: 63 } }`
+</ParamField>
+
+<ParamField path="path" type="ByColor<ByCastlingSide<SquareSet>>">
+  Squares that must be empty for castling
+</ParamField>
+
+### Static Methods
+
+#### Castles.default()
+
+Creates castling state for standard chess starting position.
+
+<ResponseField name="default" type="Castles">
+  Castles instance with all castling rights available
+</ResponseField>
+
+```typescript
+const castles = Castles.default();
+console.log(castles.rook.white.h); // 7 (h1 rook)
+```
+
+#### Castles.empty()
+
+Creates castling state with no castling rights.
+
+<ResponseField name="empty" type="Castles">
+  Castles instance with no castling available
+</ResponseField>
+
+```typescript
+const castles = Castles.empty();
+console.log(castles.castlingRights.isEmpty()); // true
+```
+
+#### Castles.fromSetup(setup)
+
+Creates castling state from a Setup object.
+
+<ParamField path="setup" type="Setup" required>
+  The setup containing board and castling rights
+</ParamField>
+
+<ResponseField name="fromSetup" type="Castles">
+  Castles instance computed from the setup
+</ResponseField>
+
+### Instance Methods
+
+#### clone()
+
+Creates a copy of the castling state.
+
+<ResponseField name="clone" type="Castles">
+  A new Castles instance with identical state
+</ResponseField>
+
+#### discardRook(square)
+
+Removes castling rights for a rook.
+
+<ParamField path="square" type="Square" required>
+  The square of the rook that moved or was captured
+</ParamField>
+
+```typescript
+const pos = Chess.default();
+pos.castles.discardRook(7); // White loses kingside castling
+```
+
+#### discardColor(color)
+
+Removes all castling rights for a color (called when king moves).
+
+<ParamField path="color" type="Color" required>
+  The color losing castling rights
+</ParamField>
+
+```typescript
+const pos = Chess.default();
+pos.castles.discardColor('white'); // White loses all castling
+```
+
+---
+
+## Context
+
+Position analysis context computed by `ctx()`.
+
+### Properties
+
+<ParamField path="king" type="Square | undefined">
+  The current player's king square (undefined if no king)
+</ParamField>
+
+<ParamField path="blockers" type="SquareSet">
+  Pieces pinned to the king (cannot move without exposing check)
+</ParamField>
+
+<ParamField path="checkers" type="SquareSet">
+  Pieces giving check to the king
+</ParamField>
+
+<ParamField path="variantEnd" type="boolean">
+  Whether the variant ending condition is met
+</ParamField>
+
+<ParamField path="mustCapture" type="boolean">
+  Whether a capture is mandatory (Antichess only)
+</ParamField>
+
+```typescript
+const pos = Chess.default();
+const ctx = pos.ctx();
+
+if (ctx.checkers.nonEmpty()) {
+  console.log('In check from', ctx.checkers.size(), 'piece(s)');
+}
+
+if (ctx.blockers.has(someSquare)) {
+  console.log('This piece is pinned to the king');
+}
+```
+
+---
+
+## IllegalSetup
+
+Enumeration of position validation errors.
+
+### Values
+
+<ParamField path="Empty" type="string">
+  `'ERR_EMPTY'` - Board has no pieces
+</ParamField>
+
+<ParamField path="OppositeCheck" type="string">
+  `'ERR_OPPOSITE_CHECK'` - The side not to move is in check
+</ParamField>
+
+<ParamField path="PawnsOnBackrank" type="string">
+  `'ERR_PAWNS_ON_BACKRANK'` - Pawns on the first or eighth rank
+</ParamField>
+
+<ParamField path="Kings" type="string">
+  `'ERR_KINGS'` - Wrong number of kings
+</ParamField>
+
+<ParamField path="Variant" type="string">
+  `'ERR_VARIANT'` - Variant-specific validation error
+</ParamField>
+
+```typescript
+import { Chess, IllegalSetup, PositionError } from 'chessops';
+
+const result = Chess.fromSetup(invalidSetup);
+if (result.isErr) {
+  const error = result.error;
+  if (error.message === IllegalSetup.Kings) {
+    console.log('Invalid number of kings');
+  }
+}
+```
+
+---
+
+## PositionError
+
+Error class for invalid positions.
+
+### Constructor
+
+<ParamField path="message" type="IllegalSetup" required>
+  The specific validation error
+</ParamField>
+
+```typescript
+try {
+  const result = Chess.fromSetup(setup);
+  if (result.isErr) {
+    throw result.error;
+  }
+} catch (error) {
+  if (error instanceof PositionError) {
+    console.error('Invalid position:', error.message);
+  }
+}
+```
+
+---
+
+## Utility Functions
+
+### pseudoDests(pos, square, ctx)
+
+Computes pseudo-legal moves (ignoring checks and pins).
+
+<ParamField path="pos" type="Position" required>
+  The position to analyze
+</ParamField>
+
+<ParamField path="square" type="Square" required>
+  The square containing the piece
+</ParamField>
+
+<ParamField path="ctx" type="Context" required>
+  The position context
+</ParamField>
+
+<ResponseField name="pseudoDests" type="SquareSet">
+  Set of pseudo-legal destination squares
+</ResponseField>
+
+```typescript
+import { pseudoDests } from 'chessops';
+
+const pos = Chess.default();
+const ctx = pos.ctx();
+const pseudo = pseudoDests(pos, 12, ctx); // e2 pawn moves
+```
+
+### equalsIgnoreMoves(left, right)
+
+Compares two positions ignoring move counters.
+
+<ParamField path="left" type="Position" required>
+  First position
+</ParamField>
+
+<ParamField path="right" type="Position" required>
+  Second position
+</ParamField>
+
+<ResponseField name="equalsIgnoreMoves" type="boolean">
+  `true` if positions are identical except for halfmoves/fullmoves
+</ResponseField>
+
+```typescript
+import { equalsIgnoreMoves } from 'chessops';
+
+const pos1 = Chess.default();
+const pos2 = Chess.default();
+pos2.fullmoves = 10;
+
+console.log(equalsIgnoreMoves(pos1, pos2)); // true
+```
+
+### castlingSide(pos, move)
+
+Determines which side a move castles to.
+
+<ParamField path="pos" type="Position" required>
+  The position
+</ParamField>
+
+<ParamField path="move" type="Move" required>
+  The move to check
+</ParamField>
+
+<ResponseField name="castlingSide" type="CastlingSide | undefined">
+  `'a'` for queenside, `'h'` for kingside, or `undefined` if not castling
+</ResponseField>
+
+```typescript
+import { castlingSide } from 'chessops';
+
+const pos = Chess.default();
+const move = { from: 4, to: 6 }; // e1-g1
+const side = castlingSide(pos, move);
+if (side === 'h') {
+  console.log('Kingside castle');
+}
+```
+
+### normalizeMove(pos, move)
+
+Normalizes a castling move to use the rook square as destination.
+
+<ParamField path="pos" type="Position" required>
+  The position
+</ParamField>
+
+<ParamField path="move" type="Move" required>
+  The move to normalize
+</ParamField>
+
+<ResponseField name="normalizeMove" type="Move">
+  The normalized move (unchanged if not castling)
+</ResponseField>
+
+```typescript
+import { normalizeMove } from 'chessops';
+
+const pos = Chess.default();
+const move = { from: 4, to: 6 }; // e1-g1 (kingside castle)
+const normalized = normalizeMove(pos, move);
+// normalized.to is now 7 (h1 rook square)
+```
+
+### isStandardMaterial(pos)
+
+Checks if a position has standard material (no promoted pieces beyond the starting material).
+
+<ParamField path="pos" type="Chess" required>
+  The chess position to check
+</ParamField>
+
+<ResponseField name="isStandardMaterial" type="boolean">
+  `true` if the material is standard
+</ResponseField>
+
+```typescript
+import { isStandardMaterial } from 'chessops';
+
+const pos = Chess.default();
+console.log(isStandardMaterial(pos)); // true
+```
+
+### isImpossibleCheck(pos)
+
+Checks if the current check is impossible (indicates invalid position).
+
+<ParamField path="pos" type="Position" required>
+  The position to validate
+</ParamField>
+
+<ResponseField name="isImpossibleCheck" type="boolean">
+  `true` if the check is impossible (e.g., triple check, multiple non-aligned sliding checkers)
+</ResponseField>
+
+```typescript
+import { isImpossibleCheck } from 'chessops';
+
+const pos = Chess.fromSetup(suspiciousSetup).value;
+if (isImpossibleCheck(pos)) {
+  console.log('This position is invalid!');
+}
+```

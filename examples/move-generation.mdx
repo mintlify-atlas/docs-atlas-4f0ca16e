@@ -1,0 +1,326 @@
+---
+title: Move Generation
+description: Generate legal moves, validate move legality, and work with move variations
+---
+
+Chessops provides powerful APIs for generating legal moves and checking move validity.
+
+## Generating All Legal Moves
+
+Get all legal moves from the current position.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { makeUci } from 'chessops/util';
+
+const pos = Chess.default();
+
+// Get all legal moves
+for (const move of pos.legalMoves()) {
+  console.log(makeUci(move)); // e2e3, e2e4, d2d3, d2d4, etc.
+}
+```
+
+## Counting Legal Moves
+
+Count the number of legal moves available (useful for perft testing).
+
+```typescript
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+// Count legal moves
+let count = 0;
+for (const _move of pos.legalMoves()) {
+  count++;
+}
+
+console.log(`Legal moves: ${count}`); // 20
+```
+
+## Checking Move Legality
+
+Validate whether a specific move is legal in the current position.
+
+<CodeGroup>
+```typescript Basic Legality Check
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+
+// Valid pawn move
+const e4 = parseUci('e2e4')!;
+console.log(pos.isLegal(e4)); // true
+
+// Invalid king move (blocked)
+const ke2 = parseUci('e1e2')!;
+console.log(pos.isLegal(ke2)); // false
+
+// Invalid knight move (not a legal square)
+const invalidKnight = parseUci('g1h2')!;
+console.log(pos.isLegal(invalidKnight)); // false
+```
+
+```typescript Checking With SAN
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+
+// parseSan returns undefined if the move is illegal
+const validMove = parseSan(pos, 'e4');
+console.log(validMove !== undefined); // true
+
+const invalidMove = parseSan(pos, 'Ke2');
+console.log(invalidMove === undefined); // true
+```
+</CodeGroup>
+
+## Move Types
+
+Chessops distinguishes between different types of moves.
+
+<Steps>
+
+<Step title="Normal Moves">
+```typescript
+import { Chess } from 'chessops/chess';
+import { isNormal, parseUci } from 'chessops/util';
+import { makeSan } from 'chessops/san';
+
+const pos = Chess.default();
+
+for (const move of pos.legalMoves()) {
+  if (isNormal(move)) {
+    console.log(`${makeSan(pos, move)}: from ${move.from} to ${move.to}`);
+    if (move.promotion) {
+      console.log(`  Promotes to: ${move.promotion}`);
+    }
+  }
+}
+```
+</Step>
+
+<Step title="Castling Moves">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { castlingSide } from 'chessops/chess';
+
+// Position where castling is possible
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const kingSide = parseUci('e1g1')!; // King-side castling
+const queenSide = parseUci('e1c1')!; // Queen-side castling
+
+console.log(castlingSide(pos, kingSide)); // 'h'
+console.log(castlingSide(pos, queenSide)); // 'a'
+console.log(pos.isLegal(kingSide)); // true
+console.log(pos.isLegal(queenSide)); // true
+```
+</Step>
+
+<Step title="En Passant Captures">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+// Set up position with en passant opportunity
+const setup = parseFen('8/8/8/5k2/3pP3/8/8/4K3 b - e3 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// En passant capture
+const epCapture = parseUci('d4e3')!;
+console.log(pos.isLegal(epCapture)); // true
+
+pos.play(epCapture);
+console.log(makeFen(pos.toSetup()));
+// Output: 8/8/8/5k2/8/4p3/8/4K3 w - - 0 2
+```
+</Step>
+
+<Step title="Drop Moves (Crazyhouse)">
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+import { isDrop, parseUci } from 'chessops/util';
+
+// Crazyhouse position with pieces in pocket
+const setup = parseFen('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R[Pp] w KQkq - 0 1').unwrap();
+const pos = Crazyhouse.fromSetup(setup).unwrap();
+
+// Drop a pawn
+const drop = parseUci('P@d4')!;
+if (isDrop(drop)) {
+  console.log(`Dropping ${drop.role} on square ${drop.to}`);
+  console.log(pos.isLegal(drop)); // Check if drop is legal
+}
+```
+</Step>
+
+</Steps>
+
+## Perft Testing
+
+Perft (performance test) counts the number of positions reached after a certain depth.
+
+```typescript
+import { Chess } from 'chessops/chess';
+
+function perft(pos: Chess, depth: number): number {
+  if (depth === 0) return 1;
+  
+  let nodes = 0;
+  for (const move of pos.legalMoves()) {
+    const child = pos.clone();
+    child.play(move);
+    nodes += perft(child, depth - 1);
+  }
+  
+  return nodes;
+}
+
+const pos = Chess.default();
+console.log(perft(pos, 1)); // 20
+console.log(perft(pos, 2)); // 400
+console.log(perft(pos, 3)); // 8902
+console.log(perft(pos, 4)); // 197281
+```
+
+## Generating Moves for Specific Pieces
+
+Filter moves by piece type or origin square.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseSquare, makeSquare, makeUci } from 'chessops/util';
+import { isNormal } from 'chessops/util';
+
+const pos = Chess.default();
+
+// Get all moves from a specific square
+const e2 = parseSquare('e2')!;
+const movesFromE2: string[] = [];
+
+for (const move of pos.legalMoves()) {
+  if (isNormal(move) && move.from === e2) {
+    movesFromE2.push(makeUci(move));
+  }
+}
+
+console.log(movesFromE2); // ['e2e3', 'e2e4']
+
+// Get all knight moves
+const knightSquares = pos.board.knight.intersect(pos.board.white);
+const knightMoves: string[] = [];
+
+for (const move of pos.legalMoves()) {
+  if (isNormal(move) && knightSquares.has(move.from)) {
+    knightMoves.push(makeUci(move));
+  }
+}
+
+console.log(knightMoves); // ['b1a3', 'b1c3', 'g1f3', 'g1h3']
+```
+
+## Move Validation with Context
+
+Understand why a move might be illegal.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+// Position where king is in check
+const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Try to move a piece that doesn't address the check
+const invalidMove = parseUci('b8c6');
+if (invalidMove) {
+  console.log(pos.isLegal(invalidMove)); // Depends on position
+}
+
+// Check if king is in check
+if (pos.isCheck()) {
+  console.log('King is in check - must move king or block');
+  
+  // Only moves that get out of check are legal
+  for (const move of pos.legalMoves()) {
+    console.log(makeUci(move));
+  }
+}
+```
+
+## Working with Move Variations
+
+Generate and compare different move sequences.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseSan, makeSanVariation } from 'chessops/san';
+import { parseUci } from 'chessops/util';
+
+// Create multiple variations from the same position
+const pos = Chess.default();
+
+// Italian Game
+const italian = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'];
+const italianPos = pos.clone();
+for (const san of italian) {
+  italianPos.play(parseSan(italianPos, san)!);
+}
+
+// Ruy Lopez
+const ruyLopez = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'];
+const ruyPos = pos.clone();
+for (const san of ruyLopez) {
+  ruyPos.play(parseSan(ruyPos, san)!);
+}
+
+// Convert UCI moves to SAN notation
+const moves = 'e2e4 e7e5 g1f3'.split(' ').map(uci => parseUci(uci)!);
+const sanVariation = makeSanVariation(pos, moves);
+console.log(sanVariation); // '1. e4 e5 2. Nf3'
+```
+
+## Advanced: Normalized Moves
+
+Some moves can be represented in multiple ways (e.g., castling).
+
+```typescript
+import { Chess, normalizeMove } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+const setup = parseFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Castling can be represented as king moving two squares or king capturing rook
+const kingSide1 = parseUci('e1g1')!; // Standard notation
+const kingSide2 = parseUci('e1h1')!; // Alternative notation
+
+const normalized1 = normalizeMove(pos, kingSide1);
+const normalized2 = normalizeMove(pos, kingSide2);
+
+console.log(normalized1); // { from: 4, to: 6 }
+console.log(normalized2); // { from: 4, to: 6 }
+// Both normalize to the same move
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PGN Parsing" icon="file-code" href="/examples/pgn-parsing">
+    Parse and work with PGN game files
+  </Card>
+  <Card title="Position Analysis" icon="magnifying-glass" href="/examples/position-analysis">
+    Analyze positions for tactical opportunities
+  </Card>
+</CardGroup>

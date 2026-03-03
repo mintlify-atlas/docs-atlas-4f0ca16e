@@ -1,0 +1,571 @@
+---
+title: PGN Notation
+description: Parse and write PGN (Portable Game Notation) files
+---
+
+PGN (Portable Game Notation) is the standard format for recording chess games. The chessops library provides a robust parser and writer for PGN, with support for streaming, variations, comments, and annotations.
+
+## Quick Start
+
+### Parsing PGN
+
+```typescript
+import { parsePgn, startingPosition } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+
+const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 *';
+const games = parsePgn(pgn);
+
+for (const game of games) {
+  const pos = startingPosition(game.headers).unwrap();
+  
+  for (const node of game.moves.mainline()) {
+    const move = parseSan(pos, node.san);
+    if (!move) break; // Illegal move
+    pos.play(move);
+  }
+}
+```
+
+### Writing PGN
+
+```typescript
+import { makePgn, defaultGame } from 'chessops/pgn';
+
+const game = defaultGame();
+game.headers.set('White', 'Carlsen');
+game.headers.set('Black', 'Nakamura');
+
+const pgn = makePgn(game);
+console.log(pgn);
+```
+
+## Parsing
+
+### parsePgn
+
+Parses a complete PGN string into an array of games:
+
+```typescript
+import { parsePgn } from 'chessops/pgn';
+
+const pgn = `
+[Event "Casual Game"]
+[White "Player 1"]
+[Black "Player 2"]
+
+1. e4 e5 2. Nf3 Nc6 *
+`;
+
+const games = parsePgn(pgn);
+console.log(games.length); // 1
+console.log(games[0].headers.get('Event')); // 'Casual Game'
+```
+
+<Note>
+The parser is very permissive and will skip invalid tokens, creating a tree of syntactically valid (but not necessarily legal) moves.
+</Note>
+
+### PgnParser (Streaming)
+
+For large PGN files, use the streaming parser to avoid memory issues:
+
+```typescript
+import { createReadStream } from 'fs';
+import { PgnParser } from 'chessops/pgn';
+
+const stream = createReadStream('games.pgn', { encoding: 'utf-8' });
+
+const parser = new PgnParser((game, err) => {
+  if (err) {
+    // Budget exceeded or other error
+    stream.destroy(err);
+    return;
+  }
+  
+  // Process game...
+  console.log('Parsed game:', game.headers.get('White'), 'vs', game.headers.get('Black'));
+});
+
+await new Promise<void>(resolve =>
+  stream
+    .on('data', (chunk: string) => parser.parse(chunk, { stream: true }))
+    .on('close', () => {
+      parser.parse(''); // Flush final game
+      resolve();
+    })
+);
+```
+
+#### Budget Protection
+
+The streaming parser has a configurable budget to prevent DoS attacks:
+
+```typescript
+import { PgnParser, emptyHeaders } from 'chessops/pgn';
+
+const parser = new PgnParser(
+  (game, err) => {
+    if (err?.message === 'ERR_PGN_BUDGET') {
+      console.error('Game too complex');
+    }
+  },
+  emptyHeaders,      // Header initializer
+  1_000_000          // Budget (default: 1,000,000)
+);
+```
+
+## Game Structure
+
+### Game Object
+
+```typescript
+interface Game<T> {
+  headers: Map<string, string>;
+  comments?: string[];  // Comments before first move
+  moves: Node<T>;
+}
+```
+
+### Node and ChildNode
+
+The game tree is built from nodes:
+
+```typescript
+import { Node, ChildNode } from 'chessops/pgn';
+
+const root = new Node<PgnNodeData>();
+const e4 = new ChildNode<PgnNodeData>({ san: 'e4' });
+root.children.push(e4);
+```
+
+### PgnNodeData
+
+```typescript
+interface PgnNodeData {
+  san: string;                // The move in SAN notation
+  startingComments?: string[]; // Comments before the move
+  comments?: string[];         // Comments after the move
+  nags?: number[];            // Numeric Annotation Glyphs
+}
+```
+
+### Navigating the Tree
+
+#### Mainline
+
+Iterate through the main line of play:
+
+```typescript
+for (const node of game.moves.mainline()) {
+  console.log(node.san);
+}
+```
+
+#### All Variations
+
+Access all variations (including sidelines):
+
+```typescript
+for (const child of game.moves.children) {
+  console.log('Variation:', child.data.san);
+  for (const subChild of child.children) {
+    console.log('  Continuation:', subChild.data.san);
+  }
+}
+```
+
+#### End Node
+
+Get the final position of the mainline:
+
+```typescript
+const endNode = game.moves.end();
+```
+
+## Working with Headers
+
+### Default Headers
+
+```typescript
+import { defaultHeaders } from 'chessops/pgn';
+
+const headers = defaultHeaders();
+// Map with: Event, Site, Date, Round, White, Black, Result
+```
+
+### Empty Headers
+
+```typescript
+import { emptyHeaders } from 'chessops/pgn';
+
+const headers = emptyHeaders();
+// Empty Map
+```
+
+### Setting Headers
+
+```typescript
+const game = defaultGame();
+game.headers.set('Event', 'World Championship');
+game.headers.set('White', 'Carlsen, Magnus');
+game.headers.set('Black', 'Caruana, Fabiano');
+game.headers.set('Result', '1/2-1/2');
+```
+
+### Variant and Starting Position
+
+Use `startingPosition` to get the correct position from headers:
+
+```typescript
+import { startingPosition } from 'chessops/pgn';
+
+const pos = startingPosition(game.headers).unwrap();
+```
+
+This handles:
+- Standard chess
+- Chess960 (if FEN is present)
+- All variants (Crazyhouse, Antichess, etc.)
+- Custom starting positions
+
+### Setting Starting Position
+
+```typescript
+import { setStartingPosition } from 'chessops/pgn';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+setStartingPosition(game.headers, pos);
+// Sets FEN header if position is non-standard
+```
+
+## Transforming the Game Tree
+
+### transform
+
+Transform the game tree while providing context:
+
+```typescript
+import { transform } from 'chessops/pgn';
+import { makeFen } from 'chessops/fen';
+import { parseSan, makeSanAndPlay } from 'chessops/san';
+
+interface AugmentedNode extends PgnNodeData {
+  fen: string;
+}
+
+const pos = startingPosition(game.headers).unwrap();
+game.moves = transform<PgnNodeData, AugmentedNode, Position>(
+  game.moves,
+  pos,
+  (pos, node) => {
+    const move = parseSan(pos, node.san);
+    if (!move) {
+      // Illegal move - cut off tree here
+      return undefined;
+    }
+    
+    const san = makeSanAndPlay(pos, move); // Mutates pos!
+    
+    return {
+      ...node,           // Keep comments and NAGs
+      san,               // Normalized SAN
+      fen: makeFen(pos.toSetup()), // Add FEN
+    };
+  }
+);
+```
+
+<Note>
+The context is automatically cloned at each fork (variation), so modifications don't affect sibling branches.
+</Note>
+
+### walk
+
+Walk through the tree without transformation:
+
+```typescript
+import { walk, Box } from 'chessops/pgn';
+
+const moveCount = new Box(0);
+
+walk(game.moves, moveCount, (ctx, node) => {
+  ctx.value++;
+  console.log(`Move ${ctx.value}: ${node.san}`);
+  return true; // Continue walking
+});
+
+console.log('Total moves:', moveCount.value);
+```
+
+Return `false` to stop walking that branch:
+
+```typescript
+walk(game.moves, pos, (pos, node) => {
+  const move = parseSan(pos, node.san);
+  if (!move) return false; // Stop on illegal move
+  
+  pos.play(move);
+  return true;
+});
+```
+
+### extend
+
+Extend a node with a sequence of moves:
+
+```typescript
+import { extend } from 'chessops/pgn';
+
+const moves = 'e4 e5 Nf3 Nc6 Bb5'.split(' ').map(san => ({ san }));
+extend(game.moves.end(), moves);
+```
+
+## Writing PGN
+
+### makePgn
+
+Convert a game to PGN format:
+
+```typescript
+import { makePgn, defaultGame } from 'chessops/pgn';
+
+const game = defaultGame();
+
+const root = game.moves;
+const e4 = new ChildNode({ san: 'e4', nags: [1] }); // ! (good move)
+root.children.push(e4);
+
+const e5 = new ChildNode({ san: 'e5', comments: ['A solid response'] });
+e4.children.push(e5);
+
+const pgn = makePgn(game);
+console.log(pgn);
+// [Event "?"]
+// [Site "?"]
+// ...
+// 
+// 1. e4 $1 1... e5 { A solid response } *
+```
+
+### Variations
+
+Variations are automatically formatted:
+
+```typescript
+const e4 = new ChildNode({ san: 'e4' });
+const e3 = new ChildNode({ san: 'e3' });
+root.children.push(e4);
+root.children.push(e3); // Alternative first move
+
+const e5 = new ChildNode({ san: 'e5' });
+const e6 = new ChildNode({ san: 'e6' });
+e4.children.push(e5);
+e4.children.push(e6); // Alternative response
+
+const pgn = makePgn(game);
+// 1. e4 ( 1. e3 ) 1... e5 ( 1... e6 ) *
+```
+
+## Comments and Annotations
+
+### Simple Comments
+
+```typescript
+const move = new ChildNode({
+  san: 'Nf3',
+  comments: ['Developing the knight']
+});
+```
+
+### NAGs (Numeric Annotation Glyphs)
+
+```typescript
+const move = new ChildNode({
+  san: 'e4',
+  nags: [1]  // ! (good move)
+});
+```
+
+Common NAGs:
+- `1` - `!` (good move)
+- `2` - `?` (mistake)
+- `3` - `!!` (brilliant move)
+- `4` - `??` (blunder)
+- `5` - `!?` (interesting move)
+- `6` - `?!` (dubious move)
+
+### Structured Comments
+
+The library supports parsing and writing structured comments with shapes, clocks, and evaluations:
+
+```typescript
+import { parseComment, makeComment } from 'chessops/pgn';
+
+const comment = parseComment('[%eval 0.42,15] [%clk 1:30:00] Good position');
+console.log(comment.text); // 'Good position'
+console.log(comment.evaluation); // { pawns: 0.42, depth: 15 }
+console.log(comment.clock); // 5400 (seconds)
+```
+
+#### Creating Structured Comments
+
+```typescript
+import { makeComment } from 'chessops/pgn';
+
+const commentStr = makeComment({
+  text: 'Critical position',
+  evaluation: { pawns: 1.5, depth: 20 },
+  clock: 3600,
+  shapes: [
+    { color: 'green', from: 4, to: 4 },      // Green circle on e1
+    { color: 'red', from: 4, to: 12 },       // Red arrow e1 to e2
+  ]
+});
+
+console.log(commentStr);
+// 'Critical position [%csl Ge1] [%cal Re1e2] [%eval 1.50,20] [%clk 1:00:00]'
+```
+
+#### Comment Shapes
+
+```typescript
+interface CommentShape {
+  color: 'green' | 'red' | 'yellow' | 'blue';
+  from: Square;
+  to: Square;  // Same as 'from' for circles
+}
+```
+
+#### Evaluations
+
+```typescript
+// Centipawn evaluation
+const evalPawns = { pawns: 1.5, depth: 20 };
+
+// Mate evaluation
+const evalMate = { mate: -3, depth: 15 };
+```
+
+## Outcomes
+
+### parseOutcome
+
+```typescript
+import { parseOutcome } from 'chessops/pgn';
+
+console.log(parseOutcome('1-0'));     // { winner: 'white' }
+console.log(parseOutcome('0-1'));     // { winner: 'black' }
+console.log(parseOutcome('1/2-1/2')); // { winner: undefined }
+console.log(parseOutcome('*'));       // undefined
+```
+
+<Note>
+The parser accepts various dash styles: `-`, `–` (en dash), `—` (em dash).
+</Note>
+
+### makeOutcome
+
+```typescript
+import { makeOutcome } from 'chessops/pgn';
+
+console.log(makeOutcome({ winner: 'white' }));     // '1-0'
+console.log(makeOutcome({ winner: 'black' }));     // '0-1'
+console.log(makeOutcome({ winner: undefined }));   // '1/2-1/2'
+console.log(makeOutcome(undefined));               // '*'
+```
+
+## Variants
+
+### parseVariant
+
+Parse variant names from PGN headers:
+
+```typescript
+import { parseVariant } from 'chessops/pgn';
+
+console.log(parseVariant('Chess'));      // 'chess'
+console.log(parseVariant('Chess960'));   // 'chess'
+console.log(parseVariant('Crazyhouse')); // 'crazyhouse'
+console.log(parseVariant('Atomic'));     // 'atomic'
+```
+
+Supported variants:
+- Standard chess (many aliases)
+- Crazyhouse
+- King of the Hill
+- Three-check
+- Antichess
+- Atomic
+- Horde
+- Racing Kings
+
+### makeVariant
+
+Convert rules to PGN variant name:
+
+```typescript
+import { makeVariant } from 'chessops/pgn';
+
+console.log(makeVariant('chess'));        // undefined (standard)
+console.log(makeVariant('crazyhouse'));   // 'Crazyhouse'
+console.log(makeVariant('3check'));       // 'Three-check'
+```
+
+## Complete Example: Validating and Annotating
+
+```typescript
+import { parsePgn, makePgn, startingPosition, transform } from 'chessops/pgn';
+import { parseSan, makeSanAndPlay } from 'chessops/san';
+import { Position } from 'chessops/chess';
+import { makeFen } from 'chessops/fen';
+
+interface AnnotatedNode extends PgnNodeData {
+  fen: string;
+  legal: boolean;
+}
+
+const pgn = `
+[Event "Example Game"]
+[White "Alice"]
+[Black "Bob"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *
+`;
+
+const games = parsePgn(pgn);
+const game = games[0];
+
+const pos = startingPosition(game.headers).unwrap();
+game.moves = transform<PgnNodeData, AnnotatedNode, Position>(
+  game.moves,
+  pos,
+  (pos, node) => {
+    const move = parseSan(pos, node.san);
+    
+    if (!move) {
+      return {
+        ...node,
+        fen: makeFen(pos.toSetup()),
+        legal: false,
+      };
+    }
+    
+    const normalizedSan = makeSanAndPlay(pos, move);
+    
+    return {
+      ...node,
+      san: normalizedSan,
+      fen: makeFen(pos.toSetup()),
+      legal: true,
+    };
+  }
+);
+
+const output = makePgn(game);
+console.log(output);
+```

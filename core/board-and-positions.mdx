@@ -1,0 +1,610 @@
+---
+title: Board and Positions
+description: Board representation and Position/Chess classes for managing game state
+---
+
+The `Board` class represents piece positions on a chess board, while `Position` and `Chess` classes manage complete game state including turn, castling rights, and move generation.
+
+## Board Class
+
+The `Board` class stores piece positions using bitboards. It implements both `ByRole<SquareSet>` and `ByColor<SquareSet>`, allowing direct access to piece sets.
+
+```typescript
+export class Board implements Iterable<[Square, Piece]>, ByRole<SquareSet>, ByColor<SquareSet> {
+  occupied: SquareSet;  // All occupied squares
+  promoted: SquareSet;  // Promoted pieces (for Crazyhouse)
+  
+  white: SquareSet;     // All white pieces
+  black: SquareSet;     // All black pieces
+  
+  pawn: SquareSet;      // All pawns
+  knight: SquareSet;    // All knights
+  bishop: SquareSet;    // All bishops
+  rook: SquareSet;      // All rooks
+  queen: SquareSet;     // All queens
+  king: SquareSet;      // All kings
+}
+```
+
+### Creating Boards
+
+#### default
+
+Create a board with the standard starting position:
+
+```typescript
+static default(): Board
+```
+
+**Example:**
+
+```typescript
+import { Board } from 'chessops';
+
+const board = Board.default();
+console.log(board.occupied.size());  // 32 pieces
+```
+
+#### empty
+
+Create an empty board:
+
+```typescript
+static empty(): Board
+```
+
+**Example:**
+
+```typescript
+import { Board } from 'chessops';
+
+const board = Board.empty();
+console.log(board.occupied.isEmpty());  // true
+```
+
+#### reset and clear
+
+Modify an existing board:
+
+```typescript
+reset(): void  // Reset to starting position
+clear(): void  // Remove all pieces
+```
+
+### Querying Pieces
+
+#### get
+
+Get the piece at a specific square:
+
+```typescript
+get(square: Square): Piece | undefined
+```
+
+**Example:**
+
+```typescript
+import { Board, parseSquare } from 'chessops';
+
+const board = Board.default();
+const piece = board.get(parseSquare('e2')!);
+console.log(piece);  // { role: 'pawn', color: 'white', promoted: false }
+```
+
+#### getColor and getRole
+
+Get just the color or role at a square:
+
+```typescript
+getColor(square: Square): Color | undefined
+getRole(square: Square): Role | undefined
+```
+
+**Example:**
+
+```typescript
+import { Board, parseSquare } from 'chessops';
+
+const board = Board.default();
+const e2 = parseSquare('e2')!;
+console.log(board.getColor(e2));  // 'white'
+console.log(board.getRole(e2));   // 'pawn'
+```
+
+#### has
+
+Check if a square is occupied:
+
+```typescript
+has(square: Square): boolean
+```
+
+**Example:**
+
+```typescript
+import { Board, parseSquare } from 'chessops';
+
+const board = Board.default();
+console.log(board.has(parseSquare('e2')!));  // true
+console.log(board.has(parseSquare('e4')!));  // false
+```
+
+### Modifying the Board
+
+#### set
+
+Place a piece on a square, returning any piece that was replaced:
+
+```typescript
+set(square: Square, piece: Piece): Piece | undefined
+```
+
+**Example:**
+
+```typescript
+import { Board, parseSquare } from 'chessops';
+
+const board = Board.empty();
+board.set(parseSquare('e4')!, { role: 'knight', color: 'white' });
+board.set(parseSquare('d5')!, { role: 'pawn', color: 'black' });
+```
+
+#### take
+
+Remove and return the piece from a square:
+
+```typescript
+take(square: Square): Piece | undefined
+```
+
+**Example:**
+
+```typescript
+import { Board, parseSquare } from 'chessops';
+
+const board = Board.default();
+const piece = board.take(parseSquare('e2')!);
+console.log(piece);  // { role: 'pawn', color: 'white', promoted: false }
+console.log(board.has(parseSquare('e2')!));  // false
+```
+
+### Accessing Piece Sets
+
+#### pieces
+
+Get all pieces of a specific color and role:
+
+```typescript
+pieces(color: Color, role: Role): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { Board } from 'chessops';
+
+const board = Board.default();
+const whiteKnights = board.pieces('white', 'knight');
+// SquareSet containing b1 and g1
+```
+
+#### Helper Methods
+
+```typescript
+rooksAndQueens(): SquareSet
+bishopsAndQueens(): SquareSet
+steppers(): SquareSet       // Knights, pawns, and kings
+sliders(): SquareSet        // Bishops, rooks, and queens
+```
+
+**Example:**
+
+```typescript
+import { Board } from 'chessops';
+
+const board = Board.default();
+const sliders = board.sliders();
+// All bishops, rooks, and queens
+```
+
+#### kingOf
+
+Find the unique king of a color:
+
+```typescript
+kingOf(color: Color): Square | undefined
+```
+
+**Example:**
+
+```typescript
+import { Board, makeSquare } from 'chessops';
+
+const board = Board.default();
+const whiteKing = board.kingOf('white');
+console.log(makeSquare(whiteKing!));  // 'e1'
+```
+
+### Iteration
+
+Boards are iterable over [square, piece] pairs:
+
+```typescript
+*[Symbol.iterator](): Iterator<[Square, Piece]>
+```
+
+**Example:**
+
+```typescript
+import { Board, makeSquare } from 'chessops';
+
+const board = Board.default();
+for (const [square, piece] of board) {
+  console.log(`${piece.color} ${piece.role} on ${makeSquare(square)}`);
+}
+```
+
+### Cloning and Comparison
+
+```typescript
+clone(): Board
+```
+
+**Example:**
+
+```typescript
+import { Board, boardEquals } from 'chessops';
+
+const board1 = Board.default();
+const board2 = board1.clone();
+
+console.log(boardEquals(board1, board2));  // true
+```
+
+## Position Class
+
+The abstract `Position` class extends `Board` with full game state including move generation and validation. The `Chess` class is the concrete implementation for standard chess.
+
+```typescript
+export abstract class Position {
+  board: Board;
+  pockets: Material | undefined;  // For Crazyhouse
+  turn: Color;
+  castles: Castles;
+  epSquare: Square | undefined;
+  remainingChecks: RemainingChecks | undefined;  // For 3check
+  halfmoves: number;
+  fullmoves: number;
+
+  protected constructor(readonly rules: Rules) {}
+}
+```
+
+### Position Properties
+
+<ParamField path="board" type="Board" required>
+  The current board position
+</ParamField>
+
+<ParamField path="turn" type="Color" required>
+  The side to move
+</ParamField>
+
+<ParamField path="castles" type="Castles" required>
+  Castling rights and rook positions
+</ParamField>
+
+<ParamField path="epSquare" type="Square | undefined">
+  En passant target square, if any
+</ParamField>
+
+<ParamField path="halfmoves" type="number" required>
+  Halfmove clock for the 50-move rule
+</ParamField>
+
+<ParamField path="fullmoves" type="number" required>
+  Full move number (starts at 1, increments after black's move)
+</ParamField>
+
+<ParamField path="pockets" type="Material | undefined">
+  Captured pieces available for drops (Crazyhouse only)
+</ParamField>
+
+<ParamField path="remainingChecks" type="RemainingChecks | undefined">
+  Remaining checks until victory (3check variant only)
+</ParamField>
+
+## Chess Class
+
+The `Chess` class is the standard implementation of `Position` for regular chess:
+
+```typescript
+export class Chess extends Position {
+  private constructor() {
+    super('chess');
+  }
+
+  static default(): Chess
+  static fromSetup(setup: Setup): Result<Chess, PositionError>
+  clone(): Chess
+}
+```
+
+### Creating Positions
+
+#### default
+
+Create the standard starting position:
+
+```typescript
+static default(): Chess
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+
+const pos = Chess.default();
+console.log(pos.turn);       // 'white'
+console.log(pos.fullmoves);  // 1
+```
+
+#### fromSetup
+
+Create a position from a Setup object:
+
+```typescript
+static fromSetup(setup: Setup): Result<Chess, PositionError>
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+console.log(pos.turn);  // 'black'
+```
+
+### Context
+
+The `ctx()` method computes important position information:
+
+```typescript
+ctx(): Context
+```
+
+<ParamField path="king" type="Square | undefined">
+  The square of the king to move
+</ParamField>
+
+<ParamField path="blockers" type="SquareSet">
+  Pieces pinned to the king
+</ParamField>
+
+<ParamField path="checkers" type="SquareSet">
+  Pieces giving check
+</ParamField>
+
+<ParamField path="variantEnd" type="boolean">
+  Whether the variant-specific end condition is met
+</ParamField>
+
+<ParamField path="mustCapture" type="boolean">
+  Whether all legal moves must be captures (antichess)
+</ParamField>
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+
+const pos = Chess.default();
+const ctx = pos.ctx();
+
+console.log(ctx.checkers.isEmpty());  // true (no check)
+console.log(ctx.blockers.isEmpty());  // true (no pins)
+```
+
+### Move Generation
+
+#### dests
+
+Get legal destination squares for a piece:
+
+```typescript
+dests(square: Square, ctx?: Context): SquareSet
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare, makeSquare } from 'chessops';
+
+const pos = Chess.default();
+const e2Dests = pos.dests(parseSquare('e2')!);
+
+for (const dest of e2Dests) {
+  console.log(makeSquare(dest));  // e3, e4
+}
+```
+
+#### allDests
+
+Get legal moves for all pieces of the side to move:
+
+```typescript
+allDests(ctx?: Context): Map<Square, SquareSet>
+```
+
+**Example:**
+
+```typescript
+import { Chess, makeSquare } from 'chessops';
+
+const pos = Chess.default();
+const allMoves = pos.allDests();
+
+for (const [from, dests] of allMoves) {
+  for (const to of dests) {
+    console.log(`${makeSquare(from)}${makeSquare(to)}`);
+  }
+}
+```
+
+#### dropDests
+
+Get legal drop squares (for Crazyhouse):
+
+```typescript
+dropDests(ctx?: Context): SquareSet
+```
+
+### Move Validation
+
+#### isLegal
+
+Check if a move is legal:
+
+```typescript
+isLegal(move: Move, ctx?: Context): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare } from 'chessops';
+
+const pos = Chess.default();
+const move = { from: parseSquare('e2')!, to: parseSquare('e4')! };
+
+console.log(pos.isLegal(move));  // true
+```
+
+### Position Queries
+
+#### Game State
+
+```typescript
+isCheck(): boolean
+isCheckmate(ctx?: Context): boolean
+isStalemate(ctx?: Context): boolean
+isEnd(ctx?: Context): boolean
+isInsufficientMaterial(): boolean
+hasInsufficientMaterial(color: Color): boolean
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isCheck());  // true
+```
+
+#### outcome
+
+Get the game outcome:
+
+```typescript
+outcome(ctx?: Context): Outcome | undefined
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+
+const pos = Chess.default();
+const outcome = pos.outcome();
+
+if (outcome) {
+  if (outcome.winner) {
+    console.log(`${outcome.winner} wins`);
+  } else {
+    console.log('Draw');
+  }
+} else {
+  console.log('Game continues');
+}
+```
+
+### Making Moves
+
+#### play
+
+Make a move, mutating the position:
+
+```typescript
+play(move: Move): void
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare } from 'chessops';
+
+const pos = Chess.default();
+pos.play({ from: parseSquare('e2')!, to: parseSquare('e4')! });
+
+console.log(pos.turn);  // 'black'
+console.log(pos.fullmoves);  // 1
+
+pos.play({ from: parseSquare('e7')!, to: parseSquare('e5')! });
+console.log(pos.turn);  // 'white'
+console.log(pos.fullmoves);  // 2
+```
+
+### Conversion
+
+#### toSetup
+
+Convert position to a Setup object:
+
+```typescript
+toSetup(): Setup
+```
+
+**Example:**
+
+```typescript
+import { Chess } from 'chessops';
+import { makeFen } from 'chessops/fen';
+
+const pos = Chess.default();
+pos.play({ from: parseSquare('e2')!, to: parseSquare('e4')! });
+
+const setup = pos.toSetup();
+const fen = makeFen(setup);
+console.log(fen);
+// rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+```
+
+#### clone
+
+Create a deep copy:
+
+```typescript
+clone(): Chess
+```
+
+**Example:**
+
+```typescript
+import { Chess, parseSquare } from 'chessops';
+
+const pos1 = Chess.default();
+const pos2 = pos1.clone();
+
+pos1.play({ from: parseSquare('e2')!, to: parseSquare('e4')! });
+
+console.log(pos1.turn);  // 'black'
+console.log(pos2.turn);  // 'white' (unchanged)
+```

@@ -1,0 +1,125 @@
+---
+title: Installation
+description: Install chessops in your TypeScript or JavaScript project
+---
+
+# Installation
+
+Install chessops using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install chessops
+```
+
+```bash yarn
+yarn add chessops
+```
+
+```bash pnpm
+pnpm add chessops
+```
+</CodeGroup>
+
+## TypeScript configuration
+
+Chessops is built with TypeScript and ships with type definitions. For the best development experience, ensure your `tsconfig.json` includes:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "target": "ES2019",
+    "lib": ["ES2019"],
+    "strict": true,
+    "esModuleInterop": true
+  }
+}
+```
+
+<Info>
+Chessops is an ES module package. If you're using CommonJS, Node.js will automatically use the CommonJS build from the package exports.
+</Info>
+
+## Importing modules
+
+Chessops provides modular imports for different functionality. Import only what you need:
+
+### Core types and utilities
+
+```typescript
+import { Chess, Position } from 'chessops/chess';
+import { Square, Color, Role, Piece, Move } from 'chessops';
+import { SquareSet } from 'chessops';
+import { Board } from 'chessops';
+import { parseSquare, makeSquare } from 'chessops';
+```
+
+### Notation parsers
+
+```typescript
+import { parseFen, makeFen, parseBoardFen } from 'chessops/fen';
+import { parseSan, makeSan } from 'chessops/san';
+import { parseUci, makeUci } from 'chessops';
+import { parsePgn, startingPosition, PgnParser } from 'chessops/pgn';
+```
+
+### Attacks and move generation
+
+```typescript
+import {
+  attacks,
+  ray,
+  between,
+  kingAttacks,
+  knightAttacks,
+  pawnAttacks,
+  bishopAttacks,
+  rookAttacks,
+  queenAttacks,
+} from 'chessops/attacks';
+```
+
+### Chess variants
+
+```typescript
+import { Crazyhouse, Atomic, Antichess, KingOfTheHill } from 'chessops/variant';
+```
+
+### Transformations and compatibility
+
+```typescript
+import { flipVertical, flipHorizontal, rotate180 } from 'chessops/transform';
+import * as compat from 'chessops/compat';
+```
+
+## Verify installation
+
+Create a simple test file to verify the installation:
+
+```typescript test.ts
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log('Legal moves:', pos.legalMoves().size());
+```
+
+Run it with:
+
+```bash
+tsx test.ts
+# or with ts-node
+ts-node test.ts
+```
+
+You should see `Legal moves: 20` printed to the console.
+
+## Next steps
+
+<Card title="Quick start guide" icon="rocket" href="/quickstart">
+  Learn how to use chessops in your application
+</Card>

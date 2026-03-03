@@ -1,0 +1,350 @@
+---
+title: SAN Notation
+description: Parse and write Standard Algebraic Notation (SAN) moves
+---
+
+SAN (Standard Algebraic Notation) is the standard human-readable chess move notation. The chessops library provides functions to parse SAN moves and generate them from positions.
+
+## Parsing SAN
+
+### parseSan
+
+Parses a SAN string into a `Move` object. Returns `undefined` if the move is illegal or invalid.
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const move = parseSan(pos, 'e4');
+
+console.log(move); // { from: 12, to: 28 }
+```
+
+<Warning>
+`parseSan` returns `undefined` for illegal moves. Always check the result before using it.
+</Warning>
+
+#### Supported Notation
+
+The parser supports all standard SAN features:
+
+**Normal moves:**
+```typescript
+parseSan(pos, 'e4');      // Pawn move
+parseSan(pos, 'Nf3');     // Piece move
+parseSan(pos, 'exd5');    // Pawn capture
+parseSan(pos, 'Nxe5');    // Piece capture
+parseSan(pos, 'e8=Q');    // Promotion
+parseSan(pos, 'exd8=N+'); // Capture promotion with check
+```
+
+**Castling:**
+```typescript
+parseSan(pos, 'O-O');     // Kingside castling
+parseSan(pos, 'O-O-O');   // Queenside castling
+```
+
+**Disambiguation:**
+```typescript
+parseSan(pos, 'Nbd7');    // File disambiguation
+parseSan(pos, 'R1a3');    // Rank disambiguation
+parseSan(pos, 'Qh4e1');   // Both file and rank
+```
+
+**Crazyhouse drops:**
+```typescript
+parseSan(pos, 'N@f3');    // Knight drop
+parseSan(pos, '@e4');     // Pawn drop (@ alone implies pawn)
+parseSan(pos, 'Q@h7+');   // Drop with check
+```
+
+**Check and checkmate symbols:**
+```typescript
+parseSan(pos, 'Qh5+');    // Check (symbol is optional)
+parseSan(pos, 'Qxf7#');   // Checkmate (symbol is optional)
+```
+
+<Note>
+The `+` and `#` symbols are optional when parsing. The parser validates legality regardless of these annotations.
+</Note>
+
+### Example: Parsing a Game
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const moves = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'];
+
+for (const san of moves) {
+  const move = parseSan(pos, san);
+  if (!move) {
+    console.error(`Illegal move: ${san}`);
+    break;
+  }
+  pos.play(move);
+}
+
+console.log(pos.isCheck()); // false
+```
+
+## Writing SAN
+
+### makeSan
+
+Generates the SAN string for a move without modifying the position:
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+const move = parseUci('e2e4')!;
+const san = makeSan(pos, move);
+
+console.log(san); // 'e4'
+console.log(pos.turn); // 'white' (position unchanged)
+```
+
+### makeSanAndPlay
+
+Generates the SAN string and plays the move on the position:
+
+```typescript
+import { makeSanAndPlay } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+const move = parseUci('e2e4')!;
+const san = makeSanAndPlay(pos, move);
+
+console.log(san); // 'e4'
+console.log(pos.turn); // 'black' (position was modified)
+```
+
+<Note>
+`makeSanAndPlay` mutates the position. Use `makeSan` if you need to keep the original position.
+</Note>
+
+### makeSanVariation
+
+Generates a full variation with move numbers:
+
+```typescript
+import { makeSanVariation } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+const variation = [
+  parseUci('e2e4')!,
+  parseUci('e7e5')!,
+  parseUci('g1f3')!,
+];
+
+const san = makeSanVariation(pos, variation);
+console.log(san); // '1. e4 e5 2. Nf3'
+```
+
+<Note>
+The position passed to `makeSanVariation` is cloned internally, so the original remains unchanged.
+</Note>
+
+#### Starting from Black's Move
+
+```typescript
+import { makeSanVariation } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const variation = [parseUci('e7e5')!, parseUci('g1f3')!];
+const san = makeSanVariation(pos, variation);
+
+console.log(san); // '1... e5 2. Nf3'
+```
+
+## Disambiguation
+
+The library automatically handles all disambiguation cases:
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+// Position with knights that can move to the same square
+const setup = parseFen('N3k2N/8/8/3N4/N4N1N/2R5/1R6/4K3 w - -').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(makeSan(pos, parseUci('a4b6')!)); // 'N4b6' (rank disambiguation)
+console.log(makeSan(pos, parseUci('h8g6')!)); // 'N8g6' (rank disambiguation)
+console.log(makeSan(pos, parseUci('h4g6')!)); // 'Nh4g6' (both needed)
+```
+
+## Special Cases
+
+### Castling
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+// After some preparation moves...
+
+const kingsideCastle = { from: 4, to: 7 }; // King to h1 rook
+console.log(makeSan(pos, kingsideCastle)); // 'O-O'
+
+const queensideCastle = { from: 4, to: 0 }; // King to a1 rook
+console.log(makeSan(pos, queensideCastle)); // 'O-O-O'
+```
+
+<Note>
+In chessops, castling moves specify the king moving to the rook's square, not to its final position.
+</Note>
+
+### En Passant
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('6bk/7b/8/3pP3/8/8/8/Q3K3 w - d6 0 2').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const epCapture = { from: 36, to: 43 }; // e5 to d6
+const san = makeSan(pos, epCapture);
+
+console.log(san); // 'exd6#'
+```
+
+### Promotion
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('7k/1p2Npbp/8/2P5/1P1r4/3b2QP/3q1pPK/2RB4 b - -').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const queenPromotion = { from: 13, to: 5, promotion: 'queen' };
+console.log(makeSan(pos, queenPromotion)); // 'f1=Q'
+
+const knightPromotion = { from: 13, to: 5, promotion: 'knight' };
+console.log(makeSan(pos, knightPromotion)); // 'f1=N+'
+```
+
+### Crazyhouse Drops
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Crazyhouse } from 'chessops/variant';
+
+const pos = Crazyhouse.default();
+// After some captures that give pieces in pocket...
+
+const knightDrop = { role: 'knight', to: 21 }; // N@f3
+const san = makeSan(pos, knightDrop);
+
+console.log(san); // 'N@f3' or 'N@f3+' if it gives check
+```
+
+## Check and Checkmate Annotation
+
+The library automatically adds `+` for check and `#` for checkmate:
+
+```typescript
+import { makeSanAndPlay } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/5PPP/8/PPPPP3/RNBQKBNR b KQkq - 0 2').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const move = { from: 59, to: 31 }; // Qh4
+const san = makeSanAndPlay(pos, move);
+
+console.log(san); // 'Qh4#'
+console.log(pos.isCheckmate()); // true
+```
+
+## Null Moves
+
+If a move is invalid (e.g., the piece doesn't exist), the library returns `--`:
+
+```typescript
+import { makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const invalidMove = { from: 28, to: 36 }; // e4 to e5, but e4 is empty
+
+const san = makeSan(pos, invalidMove);
+console.log(san); // '--'
+```
+
+## Complete Example: Converting UCI to SAN
+
+```typescript
+import { parseSan, makeSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+function uciToSan(pos: Chess, uci: string): string | undefined {
+  const move = parseUci(uci);
+  if (!move) return undefined;
+  
+  return makeSan(pos, move);
+}
+
+const pos = Chess.default();
+console.log(uciToSan(pos, 'e2e4')); // 'e4'
+console.log(uciToSan(pos, 'g1f3')); // 'Nf3'
+```
+
+## Complete Example: Parsing and Validating a Game
+
+```typescript
+import { parseSan } from 'chessops/san';
+import { Chess } from 'chessops/chess';
+
+function playGame(moves: string[]): Chess | string {
+  const pos = Chess.default();
+  
+  for (let i = 0; i < moves.length; i++) {
+    const move = parseSan(pos, moves[i]);
+    
+    if (!move) {
+      return `Illegal move at position ${i + 1}: ${moves[i]}`;
+    }
+    
+    pos.play(move);
+    
+    if (pos.isCheckmate()) {
+      return pos;
+    }
+  }
+  
+  return pos;
+}
+
+const result = playGame(['e4', 'e5', 'Qh5', 'Nc6', 'Bc4', 'Nf6', 'Qxf7#']);
+
+if (typeof result === 'string') {
+  console.error(result);
+} else {
+  console.log('Game completed');
+  console.log('Checkmate:', result.isCheckmate());
+}
+```

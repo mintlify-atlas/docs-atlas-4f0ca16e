@@ -1,0 +1,442 @@
+---
+title: Position Analysis
+description: Analyze chess positions for checks, checkmate, stalemate, insufficient material, and more
+---
+
+Chessops provides comprehensive position analysis capabilities to evaluate game states and detect various chess conditions.
+
+## Checking for Check
+
+Detect if the current player's king is in check.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+if (pos.isCheck()) {
+  console.log(`${pos.turn} king is in check!`);
+  
+  // Get the squares from which the king is being attacked
+  const king = pos.board.kingOf(pos.turn);
+  if (king !== undefined) {
+    const checkers = pos.checkers();
+    console.log(`Number of checking pieces: ${checkers.size()}`);
+  }
+}
+```
+
+## Detecting Checkmate
+
+Determine if the position is checkmate.
+
+<CodeGroup>
+```typescript Scholar's Mate
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Scholar's mate position
+const fen = 'r1bqkbnr/ppp2Qpp/2np4/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4';
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isCheckmate()); // true
+console.log(pos.turn); // 'black'
+console.log(pos.isCheck()); // true (checkmate implies check)
+```
+
+```typescript Fool's Mate
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+const moves = ['f3', 'e5', 'g4', 'Qh4#'];
+
+for (const san of moves) {
+  const move = parseSan(pos, san)!;
+  pos.play(move);
+}
+
+console.log(pos.isCheckmate()); // true
+console.log(pos.turn); // 'white' (white is checkmated)
+```
+</CodeGroup>
+
+## Detecting Stalemate
+
+Check if the position is a stalemate (no legal moves but not in check).
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Stalemate position
+const fen = '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1';
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isStalemate()); // true
+console.log(pos.isCheck()); // false (stalemate is not check)
+console.log(pos.isCheckmate()); // false
+
+// Count legal moves
+let legalMoves = 0;
+for (const _move of pos.legalMoves()) {
+  legalMoves++;
+}
+console.log(legalMoves); // 0
+```
+
+## Detecting Game Over
+
+Check if the game has ended for any reason.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+function analyzeGameState(fen: string) {
+  const setup = parseFen(fen).unwrap();
+  const pos = Chess.fromSetup(setup).unwrap();
+  
+  if (pos.isCheckmate()) {
+    const winner = pos.turn === 'white' ? 'Black' : 'White';
+    return `Checkmate! ${winner} wins.`;
+  }
+  
+  if (pos.isStalemate()) {
+    return 'Stalemate! Game is drawn.';
+  }
+  
+  if (pos.isInsufficientMaterial()) {
+    return 'Insufficient material! Game is drawn.';
+  }
+  
+  const outcome = pos.outcome();
+  if (outcome) {
+    if (outcome.winner === undefined) {
+      return 'Game is drawn.';
+    }
+    return `${outcome.winner} wins!`;
+  }
+  
+  return 'Game in progress.';
+}
+
+// Test various positions
+console.log(analyzeGameState('r1bqkbnr/ppp2Qpp/2np4/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4'));
+// Output: Checkmate! White wins.
+
+console.log(analyzeGameState('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1'));
+// Output: Stalemate! Game is drawn.
+
+console.log(analyzeGameState('8/5k2/8/8/8/8/3K4/8 w - - 0 1'));
+// Output: Insufficient material! Game is drawn.
+```
+
+## Insufficient Material
+
+Detect positions where checkmate is impossible.
+
+<Steps>
+
+<Step title="King vs King">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const fen = '8/5k2/8/8/8/8/3K4/8 w - - 0 1';
+const pos = Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
+
+console.log(pos.hasInsufficientMaterial('white')); // true
+console.log(pos.hasInsufficientMaterial('black')); // true
+console.log(pos.isInsufficientMaterial()); // true
+```
+</Step>
+
+<Step title="King and Knight/Bishop vs King">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// King and knight vs king
+const knightFen = '8/3k4/8/8/2N5/8/3K4/8 b - - 0 1';
+const knightPos = Chess.fromSetup(parseFen(knightFen).unwrap()).unwrap();
+
+console.log(knightPos.isInsufficientMaterial()); // true
+
+// King and bishop vs king  
+const bishopFen = '8/3k4/8/8/2B5/8/3K4/8 b - - 0 1';
+const bishopPos = Chess.fromSetup(parseFen(bishopFen).unwrap()).unwrap();
+
+console.log(bishopPos.isInsufficientMaterial()); // true
+```
+</Step>
+
+<Step title="Opposite Colored Bishops">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// King and light-squared bishop vs king and dark-squared bishop
+const fen = '8/4bk2/8/8/8/8/3KB3/8 w - - 0 1';
+const pos = Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
+
+console.log(pos.hasInsufficientMaterial('white')); // false
+console.log(pos.hasInsufficientMaterial('black')); // false
+// Note: Both sides can still mate, but it requires cooperation
+```
+</Step>
+
+<Step title="Material That Can Force Mate">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// King and rook vs king - sufficient material
+const rookFen = '8/4rk2/8/8/8/8/3K4/8 w - - 0 1';
+const rookPos = Chess.fromSetup(parseFen(rookFen).unwrap()).unwrap();
+
+console.log(rookPos.hasInsufficientMaterial('white')); // true
+console.log(rookPos.hasInsufficientMaterial('black')); // false
+console.log(rookPos.isInsufficientMaterial()); // false
+
+// King and queen vs king - sufficient material
+const queenFen = '8/4qk2/8/8/8/8/3K4/8 w - - 0 1';
+const queenPos = Chess.fromSetup(parseFen(queenFen).unwrap()).unwrap();
+
+console.log(queenPos.isInsufficientMaterial()); // false
+```
+</Step>
+
+</Steps>
+
+## Analyzing Attacks
+
+Find which pieces attack specific squares.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseSquare } from 'chessops/util';
+
+const pos = Chess.default();
+
+// Find all white pieces that can attack e4
+const e4 = parseSquare('e4')!;
+
+// After moving e2-e4
+const move = { from: 12, to: 28 };
+pos.play(move);
+
+// Check what squares are attacked
+const d5 = parseSquare('d5')!;
+const attacked = pos.board.white; // Get white pieces
+
+console.log(`e4 square: ${e4}`);
+console.log(`d5 square: ${d5}`);
+```
+
+## Checking Pinned Pieces
+
+Detect pieces that are pinned to the king.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseSquare, makeSquare } from 'chessops/util';
+
+// Position with pinned knight
+const fen = 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 1';
+const pos = Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
+
+// Get squares of pieces pinned to their king
+const king = pos.board.kingOf(pos.turn);
+if (king !== undefined) {
+  const context = pos.ctx();
+  console.log('Pinned pieces:');
+  for (const square of context.blockers) {
+    console.log(`  ${makeSquare(square)}`);
+  }
+}
+```
+
+## Threefold Repetition
+
+Track position repetitions to detect draws by threefold repetition.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+import { PositionHash } from 'chessops/hash';
+
+const pos = Chess.default();
+const positionHistory = new Map<string, number>();
+
+function recordPosition(pos: Chess): boolean {
+  const hash = PositionHash.fromSetup(pos).toString();
+  const count = (positionHistory.get(hash) || 0) + 1;
+  positionHistory.set(hash, count);
+  
+  if (count >= 3) {
+    console.log('Threefold repetition! Draw can be claimed.');
+    return true;
+  }
+  return false;
+}
+
+// Play moves that repeat the position
+const moves = ['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3', 'Nf6', 'Ng1', 'Ng8'];
+
+for (const san of moves) {
+  const move = parseSan(pos, san)!;
+  pos.play(move);
+  
+  if (recordPosition(pos)) {
+    break;
+  }
+}
+```
+
+## Fifty Move Rule
+
+Track halfmoves to detect the fifty move rule.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseSan } from 'chessops/san';
+
+const fen = '8/5k2/8/8/8/8/3K4/3R4 w - - 98 100';
+const pos = Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
+
+console.log(`Halfmoves: ${pos.halfmoves}`);
+
+if (pos.halfmoves >= 100) {
+  console.log('Fifty move rule! Draw can be claimed.');
+} else if (pos.halfmoves >= 50) {
+  console.log(`${Math.floor((100 - pos.halfmoves) / 2)} moves until fifty move rule.`);
+}
+
+// Playing a move resets counter if it's a pawn move or capture
+const move = parseSan(pos, 'Rd7+');
+if (move) {
+  pos.play(move);
+  console.log(`After move, halfmoves: ${pos.halfmoves}`); // 99
+}
+```
+
+## Validating Positions
+
+Check if a position is legal according to chess rules.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+function validatePosition(fen: string): void {
+  const result = parseFen(fen);
+  
+  if (result.isErr) {
+    console.log('Invalid FEN:', result.error);
+    return;
+  }
+  
+  const setup = result.value;
+  const posResult = Chess.fromSetup(setup);
+  
+  if (posResult.isErr) {
+    console.log('Invalid position:', posResult.error);
+    return;
+  }
+  
+  console.log('Position is valid!');
+}
+
+// Valid position
+validatePosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+
+// Invalid - pawns on first rank
+validatePosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBPKPNR w KQkq - 0 1');
+
+// Invalid - both kings in check (impossible)
+validatePosition('3R4/8/q4k2/2B5/1NK5/3b4/8/8 w - - 0 1');
+```
+
+## Advanced: Attack Maps
+
+Visualize squares controlled by each side.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { SquareSet } from 'chessops/squareSet';
+import { makeSquare } from 'chessops/util';
+import { attacks } from 'chessops/attacks';
+
+const pos = Chess.default();
+
+function getControlledSquares(pos: Chess, color: 'white' | 'black'): SquareSet {
+  let controlled = SquareSet.empty();
+  
+  for (const square of pos.board[color]) {
+    const piece = pos.board.get(square);
+    if (piece) {
+      const attacks_from_square = attacks(piece, square, pos.board.occupied);
+      controlled = controlled.union(attacks_from_square);
+    }
+  }
+  
+  return controlled;
+}
+
+const whiteControl = getControlledSquares(pos, 'white');
+const blackControl = getControlledSquares(pos, 'black');
+
+console.log(`White controls ${whiteControl.size()} squares`);
+console.log(`Black controls ${blackControl.size()} squares`);
+
+// Find contested squares
+const contested = whiteControl.intersect(blackControl);
+console.log(`\nContested squares:`);
+for (const square of contested) {
+  console.log(`  ${makeSquare(square)}`);
+}
+```
+
+## Variant-Specific Analysis
+
+Different chess variants have different rules.
+
+```typescript
+import { Atomic, Antichess, KingOfTheHill } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+// Atomic chess - king next to king is checkmate
+const atomicFen = '8/8/8/8/8/3k4/3K4/8 w - - 0 1';
+const atomicPos = Atomic.fromSetup(parseFen(atomicFen).unwrap()).unwrap();
+console.log('Atomic checkmate:', atomicPos.isCheckmate());
+
+// Antichess - goal is to lose all pieces
+const antichessFen = '8/8/8/8/8/8/8/K7 w - - 0 1';
+const antichessPos = Antichess.fromSetup(parseFen(antichessFen).unwrap()).unwrap();
+console.log('Antichess - white wins:', antichessPos.outcome()?.winner === 'white');
+
+// King of the Hill - king reaching center wins
+const kothFen = '8/8/8/3K4/8/8/4k3/8 w - - 0 1';
+const kothPos = KingOfTheHill.fromSetup(parseFen(kothFen).unwrap()).unwrap();
+if (kothPos.outcome()) {
+  console.log('King of the Hill winner:', kothPos.outcome()!.winner);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/examples/basic-usage">
+    Learn position creation and move making basics
+  </Card>
+  <Card title="Move Generation" icon="chess" href="/examples/move-generation">
+    Generate and validate all legal moves
+  </Card>
+</CardGroup>

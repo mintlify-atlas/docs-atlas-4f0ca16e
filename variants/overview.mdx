@@ -1,0 +1,208 @@
+---
+title: Chess Variants
+description: Overview of all supported chess variants in chessops
+icon: chess-board
+---
+
+Chessops supports 8 different chess variants, each with unique rules and gameplay mechanics. All variants extend the base `Position` class and provide specialized implementations for their specific rules.
+
+## Supported Variants
+
+<CardGroup cols={2}>
+  <Card
+    title="Crazyhouse"
+    icon="box"
+    href="/variants/crazyhouse"
+  >
+    Drop captured pieces back on the board
+  </Card>
+  
+  <Card
+    title="Atomic"
+    icon="atom"
+    href="/variants/atomic"
+  >
+    Captures cause explosions that destroy surrounding pieces
+  </Card>
+  
+  <Card
+    title="Antichess"
+    icon="ban"
+    href="/variants/other-variants#antichess"
+  >
+    Lose all your pieces to win, captures are forced
+  </Card>
+  
+  <Card
+    title="King of the Hill"
+    icon="crown"
+    href="/variants/other-variants#king-of-the-hill"
+  >
+    Get your king to the center to win
+  </Card>
+  
+  <Card
+    title="Three-check"
+    icon="check-double"
+    href="/variants/other-variants#three-check"
+  >
+    Give check three times to win
+  </Card>
+  
+  <Card
+    title="Horde"
+    icon="users"
+    href="/variants/other-variants#horde"
+  >
+    White has 36 pawns vs Black's normal army
+  </Card>
+  
+  <Card
+    title="Racing Kings"
+    icon="flag-checkered"
+    href="/variants/other-variants#racing-kings"
+  >
+    Race your king to the 8th rank, no checks allowed
+  </Card>
+  
+  <Card
+    title="Standard Chess"
+    icon="chess"
+    href="/core/board-and-positions"
+  >
+    Classic chess rules (Chess class)
+  </Card>
+</CardGroup>
+
+## Common API
+
+All variant classes share a common interface:
+
+### Creating Positions
+
+```typescript
+import { Crazyhouse, Atomic, KingOfTheHill } from 'chessops/variant';
+
+// Create default starting position
+const crazyhouse = Crazyhouse.default();
+const atomic = Atomic.default();
+const koth = KingOfTheHill.default();
+```
+
+### Creating from Setup
+
+```typescript
+import { Atomic } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const result = Atomic.fromSetup(setup);
+
+if (result.isOk) {
+  const pos = result.value;
+  // Use position
+} else {
+  console.error('Invalid setup:', result.error);
+}
+```
+
+### Playing Moves
+
+```typescript
+const pos = Crazyhouse.default();
+
+// Make a move
+pos.play({ from: 12, to: 28 }); // e2-e4
+
+// Clone before playing (immutable pattern)
+const newPos = pos.clone();
+newPos.play({ from: 52, to: 36 }); // e7-e5
+```
+
+### Checking Game State
+
+```typescript
+// Check if variant-specific win condition is met
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  if (outcome?.winner) {
+    console.log(`${outcome.winner} wins!`);
+  } else {
+    console.log('Draw');
+  }
+}
+
+// Standard checks work too
+if (pos.isCheckmate()) {
+  console.log('Checkmate!');
+}
+
+if (pos.isStalemate()) {
+  console.log('Stalemate!');
+}
+```
+
+## Variant Selection
+
+Use the `defaultPosition` helper to create positions by variant name:
+
+```typescript
+import { defaultPosition } from 'chessops/variant';
+import { Rules } from 'chessops/types';
+
+const variant: Rules = 'atomic';
+const pos = defaultPosition(variant);
+
+// Works for all variants
+const variants: Rules[] = [
+  'chess',
+  'crazyhouse',
+  'atomic',
+  'antichess',
+  'kingofthehill',
+  '3check',
+  'horde',
+  'racingkings'
+];
+```
+
+## Validation
+
+Each variant has custom validation rules:
+
+```typescript
+import { Atomic } from 'chessops/variant';
+import { Result } from '@badrap/result';
+
+const result = Atomic.fromSetup(setup);
+
+if (result.isErr) {
+  // Handle PositionError
+  const error = result.error;
+  console.log(error.message);
+}
+```
+
+<Note>
+Variant-specific rules are enforced during setup validation and move generation.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Crazyhouse"
+    icon="box"
+    href="/variants/crazyhouse"
+  >
+    Learn about pockets and drop moves
+  </Card>
+  
+  <Card
+    title="Atomic Chess"
+    icon="atom"
+    href="/variants/atomic"
+  >
+    Understand explosion mechanics
+  </Card>
+</CardGroup>

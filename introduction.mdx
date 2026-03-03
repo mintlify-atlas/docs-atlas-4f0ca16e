@@ -1,0 +1,76 @@
+---
+title: Introduction
+description: Chess and chess variant rules and operations in TypeScript
+---
+
+# Introduction
+
+Chessops is a powerful TypeScript library that provides chess and chess variant rules and operations. It offers a type-safe, efficient implementation of chess logic using bitboards and modern TypeScript features.
+
+## Key features
+
+Chessops provides everything you need to work with chess positions, moves, and games:
+
+- **Type-safe position representation** - Uses bitboards (`SquareSet`) for efficient board state management
+- **FEN/PGN/SAN notation support** - Parse and write standard chess notations
+- **Legal move generation** - Generate all legal moves for any position
+- **Chess variants** - Support for 8 variants: Standard chess, Crazyhouse, King of the Hill, Three-check, Antichess, Atomic, Horde, and Racing Kings
+- **Streaming PGN parser** - Process large PGN files with denial-of-service resistant streaming
+- **Attack calculations** - Fast attack and ray computations using Hyperbola Quintessence
+- **Position validation** - Validate chess positions and detect illegal setups
+- **Board transformations** - Mirror and rotate positions
+- **Chess960 support** - Full support for Chess960/Fischer Random Chess
+
+<CardGroup cols={3}>
+  <Card title="Installation" icon="download" href="/installation">
+    Get started with npm, yarn, or pnpm
+  </Card>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Learn the basics in 5 minutes
+  </Card>
+  <Card title="API reference" icon="code" href="https://niklasf.github.io/chessops/">
+    Explore the full API documentation
+  </Card>
+</CardGroup>
+
+## Example
+
+Here's a simple example showing how to parse a FEN position and check for checkmate:
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('r1bqkbnr/ppp2Qpp/2np4/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+console.assert(pos.isCheckmate());
+```
+
+<Note>
+Chessops uses the `Result` type from `@badrap/result` for error handling. Use `.unwrap()` to extract values or handle errors explicitly.
+</Note>
+
+## Core concepts
+
+Chessops is built around a clear vocabulary of types:
+
+- **Square** - A square on the chess board (0-63)
+- **SquareSet** - A set of squares implemented as bitboards for efficiency
+- **Color** - `'white'` or `'black'`
+- **Role** - Piece type: `'pawn'`, `'knight'`, `'bishop'`, `'rook'`, `'queen'`, `'king'`
+- **Piece** - Combination of role and color
+- **Board** - Map of piece positions
+- **Setup** - A position that may not be legal
+- **Position** - Base class for legal positions
+- **Chess** - Concrete implementation for standard chess positions
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Install chessops" icon="terminal" href="/installation">
+    Add chessops to your project
+  </Card>
+  <Card title="Quick start guide" icon="book" href="/quickstart">
+    Build your first chess application
+  </Card>
+</CardGroup>

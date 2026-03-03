@@ -1,0 +1,313 @@
+---
+title: Core Type System
+description: Fundamental types for representing chess positions, pieces, and moves
+---
+
+The chessops library uses a strongly-typed system for representing chess entities. All core types are exported from `types.ts` and form the foundation of the library.
+
+## Squares
+
+### Square
+
+A `Square` is represented as a number from 0 to 63, where square 0 is a1, square 1 is b1, and square 63 is h8.
+
+```typescript
+export type Square = number;
+```
+
+### SquareName
+
+Squares can also be represented as algebraic notation strings:
+
+```typescript
+export type SquareName = `${FileName}${RankName}`;
+// Examples: 'a1', 'e4', 'h8'
+```
+
+### File and Rank Names
+
+```typescript
+export const FILE_NAMES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
+export type FileName = (typeof FILE_NAMES)[number];
+
+export const RANK_NAMES = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
+export type RankName = (typeof RANK_NAMES)[number];
+```
+
+## Colors and Roles
+
+### Color
+
+Represents the color of a piece or side to move:
+
+```typescript
+export const COLORS = ['white', 'black'] as const;
+export type Color = (typeof COLORS)[number];
+```
+
+### Role
+
+Represents the type of chess piece:
+
+```typescript
+export const ROLES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
+export type Role = (typeof ROLES)[number];
+```
+
+### RoleChar
+
+Single-character representation used in FEN and UCI notation:
+
+```typescript
+export const ROLE_CHARS = ['q', 'n', 'r', 'b', 'p', 'k'] as const;
+export type RoleChar = (typeof ROLE_CHARS)[number];
+```
+
+## Pieces
+
+### Piece
+
+Represents a chess piece with its color, role, and promotion status:
+
+<ParamField path="role" type="Role" required>
+  The type of piece: pawn, knight, bishop, rook, queen, or king
+</ParamField>
+
+<ParamField path="color" type="Color" required>
+  The color of the piece: white or black
+</ParamField>
+
+<ParamField path="promoted" type="boolean">
+  Whether this piece is a promoted pawn (relevant for Crazyhouse)
+</ParamField>
+
+```typescript
+export interface Piece {
+  role: Role;
+  color: Color;
+  promoted?: boolean;
+}
+```
+
+**Example:**
+
+```typescript
+import { Piece } from 'chessops';
+
+const whiteKnight: Piece = { role: 'knight', color: 'white' };
+const blackQueen: Piece = { role: 'queen', color: 'black' };
+const promotedRook: Piece = { role: 'rook', color: 'white', promoted: true };
+```
+
+## Moves
+
+### NormalMove
+
+Represents a standard chess move from one square to another:
+
+<ParamField path="from" type="Square" required>
+  The origin square (0-63)
+</ParamField>
+
+<ParamField path="to" type="Square" required>
+  The destination square (0-63)
+</ParamField>
+
+<ParamField path="promotion" type="Role">
+  The piece role to promote to (queen, rook, bishop, or knight)
+</ParamField>
+
+```typescript
+export interface NormalMove {
+  from: Square;
+  to: Square;
+  promotion?: Role;
+}
+```
+
+**Example:**
+
+```typescript
+import { NormalMove, parseSquare } from 'chessops';
+
+// e2-e4
+const pawnMove: NormalMove = { 
+  from: parseSquare('e2')!, 
+  to: parseSquare('e4')! 
+};
+
+// e7-e8 with queen promotion
+const promotionMove: NormalMove = { 
+  from: parseSquare('e7')!, 
+  to: parseSquare('e8')!,
+  promotion: 'queen'
+};
+```
+
+### DropMove
+
+Represents a piece drop in variants like Crazyhouse:
+
+<ParamField path="role" type="Role" required>
+  The type of piece to drop
+</ParamField>
+
+<ParamField path="to" type="Square" required>
+  The square to drop the piece on (0-63)
+</ParamField>
+
+```typescript
+export interface DropMove {
+  role: Role;
+  to: Square;
+}
+```
+
+**Example:**
+
+```typescript
+import { DropMove, parseSquare } from 'chessops';
+
+// Drop a knight on f3
+const knightDrop: DropMove = { 
+  role: 'knight', 
+  to: parseSquare('f3')! 
+};
+```
+
+### Move
+
+The unified move type that can be either a normal move or a drop:
+
+```typescript
+export type Move = NormalMove | DropMove;
+```
+
+### Type Guards
+
+Helper functions to distinguish between move types:
+
+```typescript
+export const isDrop = (v: Move): v is DropMove => 'role' in v;
+export const isNormal = (v: Move): v is NormalMove => 'from' in v;
+```
+
+**Example:**
+
+```typescript
+import { Move, isDrop, isNormal } from 'chessops';
+
+function processMove(move: Move) {
+  if (isDrop(move)) {
+    console.log(`Dropping ${move.role} on ${move.to}`);
+  } else if (isNormal(move)) {
+    console.log(`Moving from ${move.from} to ${move.to}`);
+    if (move.promotion) {
+      console.log(`Promoting to ${move.promotion}`);
+    }
+  }
+}
+```
+
+## Game Rules and Outcomes
+
+### Rules
+
+Supported chess variants:
+
+```typescript
+export const RULES = [
+  'chess',
+  'antichess',
+  'kingofthehill',
+  '3check',
+  'atomic',
+  'horde',
+  'racingkings',
+  'crazyhouse',
+] as const;
+
+export type Rules = (typeof RULES)[number];
+```
+
+### Outcome
+
+Represents the outcome of a game:
+
+<ParamField path="winner" type="Color | undefined" required>
+  The winning color, or undefined for a draw
+</ParamField>
+
+```typescript
+export interface Outcome {
+  winner: Color | undefined;
+}
+```
+
+**Example:**
+
+```typescript
+import { Outcome } from 'chessops';
+
+const whiteWins: Outcome = { winner: 'white' };
+const blackWins: Outcome = { winner: 'black' };
+const draw: Outcome = { winner: undefined };
+```
+
+## Castling
+
+### CastlingSide
+
+Represents which side of the board to castle on:
+
+```typescript
+export const CASTLING_SIDES = ['a', 'h'] as const;
+export type CastlingSide = (typeof CASTLING_SIDES)[number];
+// 'a' for queenside, 'h' for kingside
+```
+
+## Indexable Types
+
+These utility types allow indexing by color, role, square, or castling side:
+
+### ByColor
+
+```typescript
+export type ByColor<T> = {
+  [color in Color]: T;
+};
+```
+
+**Example:**
+
+```typescript
+import { ByColor } from 'chessops';
+
+const material: ByColor<number> = {
+  white: 39,
+  black: 39
+};
+```
+
+### ByRole
+
+```typescript
+export type ByRole<T> = {
+  [role in Role]: T;
+};
+```
+
+### BySquare
+
+```typescript
+export type BySquare<T> = T[];
+// Indexable by square indices (0-63)
+```
+
+### ByCastlingSide
+
+```typescript
+export type ByCastlingSide<T> = {
+  [side in CastlingSide]: T;
+};
+```

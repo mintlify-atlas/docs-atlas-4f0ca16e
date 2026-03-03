@@ -1,0 +1,401 @@
+---
+title: 'types'
+description: 'Core type definitions for chess positions, pieces, moves, and game rules'
+---
+
+## Overview
+
+The `types` module provides all fundamental type definitions used throughout chessops, including chess piece types, board coordinates, move representations, and game rule variants.
+
+## Constants
+
+### FILE_NAMES
+
+```typescript
+const FILE_NAMES: readonly ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+```
+
+Array of all chess file names from a-h.
+
+### RANK_NAMES
+
+```typescript
+const RANK_NAMES: readonly ['1', '2', '3', '4', '5', '6', '7', '8']
+```
+
+Array of all chess rank names from 1-8.
+
+### ROLE_CHARS
+
+```typescript
+const ROLE_CHARS: readonly ['q', 'n', 'r', 'b', 'p', 'k']
+```
+
+Array of single-character piece role identifiers.
+
+### COLORS
+
+```typescript
+const COLORS: readonly ['white', 'black']
+```
+
+Array of valid chess piece colors.
+
+### ROLES
+
+```typescript
+const ROLES: readonly ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']
+```
+
+Array of all chess piece roles.
+
+### CASTLING_SIDES
+
+```typescript
+const CASTLING_SIDES: readonly ['a', 'h']
+```
+
+Array of castling sides, represented by the file of the rook involved.
+
+### RULES
+
+```typescript
+const RULES: readonly [
+  'chess',
+  'antichess',
+  'kingofthehill',
+  '3check',
+  'atomic',
+  'horde',
+  'racingkings',
+  'crazyhouse'
+]
+```
+
+Array of supported chess variant rule sets.
+
+## Type Aliases
+
+### FileName
+
+```typescript
+type FileName = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h'
+```
+
+A chess file name (column).
+
+### RankName
+
+```typescript
+type RankName = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8'
+```
+
+A chess rank name (row).
+
+### Square
+
+```typescript
+type Square = number
+```
+
+A square index from 0 to 63, where 0 is a1 and 63 is h8. Calculated as `file + 8 * rank`.
+
+**Example:**
+```typescript
+const a1: Square = 0;
+const e4: Square = 4 + 8 * 3; // 28
+const h8: Square = 63;
+```
+
+### SquareName
+
+```typescript
+type SquareName = `${FileName}${RankName}`
+```
+
+A square in algebraic notation, combining a file and rank name.
+
+**Example:**
+```typescript
+const square: SquareName = 'e4';
+const corner: SquareName = 'a1';
+```
+
+### RoleChar
+
+```typescript
+type RoleChar = 'q' | 'n' | 'r' | 'b' | 'p' | 'k'
+```
+
+Single-character representation of a piece role.
+
+### Color
+
+```typescript
+type Color = 'white' | 'black'
+```
+
+A chess piece color.
+
+### Role
+
+```typescript
+type Role = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king'
+```
+
+A chess piece role.
+
+### CastlingSide
+
+```typescript
+type CastlingSide = 'a' | 'h'
+```
+
+The side on which castling occurs, represented by the file of the rook involved.
+
+### Rules
+
+```typescript
+type Rules = 'chess' | 'antichess' | 'kingofthehill' | '3check' | 'atomic' | 'horde' | 'racingkings' | 'crazyhouse'
+```
+
+Supported chess variant rule sets.
+
+### BySquare\<T\>
+
+```typescript
+type BySquare<T> = T[]
+```
+
+An array indexable by square indices (0-63).
+
+**Example:**
+```typescript
+const pieceOnSquare: BySquare<Piece | undefined> = new Array(64);
+pieceOnSquare[0] = { role: 'rook', color: 'white' }; // a1
+```
+
+### ByColor\<T\>
+
+```typescript
+type ByColor<T> = {
+  white: T;
+  black: T;
+}
+```
+
+An object indexable by color (`white` and `black`).
+
+**Example:**
+```typescript
+const materialCount: ByColor<number> = {
+  white: 39,
+  black: 39
+};
+```
+
+### ByRole\<T\>
+
+```typescript
+type ByRole<T> = {
+  pawn: T;
+  knight: T;
+  bishop: T;
+  rook: T;
+  queen: T;
+  king: T;
+}
+```
+
+An object indexable by piece role.
+
+**Example:**
+```typescript
+const pieceValues: ByRole<number> = {
+  pawn: 1,
+  knight: 3,
+  bishop: 3,
+  rook: 5,
+  queen: 9,
+  king: 0
+};
+```
+
+### ByCastlingSide\<T\>
+
+```typescript
+type ByCastlingSide<T> = {
+  a: T;
+  h: T;
+}
+```
+
+An object indexable by castling side (`a` and `h`).
+
+**Example:**
+```typescript
+const rookSquares: ByCastlingSide<Square> = {
+  a: 0,  // a1
+  h: 7   // h1
+};
+```
+
+### Move
+
+```typescript
+type Move = NormalMove | DropMove
+```
+
+A chess move, either a normal move or a drop move (for variants like Crazyhouse).
+
+## Interfaces
+
+### Piece
+
+```typescript
+interface Piece {
+  role: Role;
+  color: Color;
+  promoted?: boolean;
+}
+```
+
+Represents a chess piece.
+
+<ResponseField name="role" type="Role" required>
+  The piece role (pawn, knight, bishop, rook, queen, or king).
+</ResponseField>
+
+<ResponseField name="color" type="Color" required>
+  The piece color (white or black).
+</ResponseField>
+
+<ResponseField name="promoted" type="boolean">
+  Whether this piece was promoted from a pawn. Used in variants like Crazyhouse where promoted pieces behave differently.
+</ResponseField>
+
+**Example:**
+```typescript
+const whitePawn: Piece = { role: 'pawn', color: 'white' };
+const blackQueen: Piece = { role: 'queen', color: 'black', promoted: true };
+```
+
+### NormalMove
+
+```typescript
+interface NormalMove {
+  from: Square;
+  to: Square;
+  promotion?: Role;
+}
+```
+
+A standard chess move from one square to another.
+
+<ResponseField name="from" type="Square" required>
+  The source square index.
+</ResponseField>
+
+<ResponseField name="to" type="Square" required>
+  The destination square index.
+</ResponseField>
+
+<ResponseField name="promotion" type="Role">
+  The piece role to promote to, if this is a pawn promotion.
+</ResponseField>
+
+**Example:**
+```typescript
+const e2e4: NormalMove = { from: 12, to: 28 };
+const promotion: NormalMove = { from: 48, to: 56, promotion: 'queen' };
+```
+
+### DropMove
+
+```typescript
+interface DropMove {
+  role: Role;
+  to: Square;
+}
+```
+
+A drop move used in variants like Crazyhouse, where a captured piece is placed back on the board.
+
+<ResponseField name="role" type="Role" required>
+  The piece role being dropped.
+</ResponseField>
+
+<ResponseField name="to" type="Square" required>
+  The destination square index.
+</ResponseField>
+
+**Example:**
+```typescript
+const dropKnight: DropMove = { role: 'knight', to: 28 }; // Drop knight on e4
+```
+
+### Outcome
+
+```typescript
+interface Outcome {
+  winner: Color | undefined;
+}
+```
+
+Represents the outcome of a chess game.
+
+<ResponseField name="winner" type="Color | undefined" required>
+  The winning color, or `undefined` for a draw.
+</ResponseField>
+
+**Example:**
+```typescript
+const whiteWins: Outcome = { winner: 'white' };
+const draw: Outcome = { winner: undefined };
+```
+
+## Type Guards
+
+### isDrop
+
+```typescript
+const isDrop: (v: Move) => v is DropMove
+```
+
+Type guard to check if a move is a drop move.
+
+<ParamField path="v" type="Move" required>
+  The move to check.
+</ParamField>
+
+**Returns:** `true` if the move is a `DropMove`, `false` otherwise.
+
+**Example:**
+```typescript
+const move: Move = { role: 'knight', to: 28 };
+if (isDrop(move)) {
+  console.log(`Dropping ${move.role}`);
+}
+```
+
+### isNormal
+
+```typescript
+const isNormal: (v: Move) => v is NormalMove
+```
+
+Type guard to check if a move is a normal move.
+
+<ParamField path="v" type="Move" required>
+  The move to check.
+</ParamField>
+
+**Returns:** `true` if the move is a `NormalMove`, `false` otherwise.
+
+**Example:**
+```typescript
+const move: Move = { from: 12, to: 28 };
+if (isNormal(move)) {
+  console.log(`Moving from ${move.from} to ${move.to}`);
+}
+```

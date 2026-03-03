@@ -1,0 +1,432 @@
+---
+title: PGN Parsing
+description: Parse PGN files, walk through game trees, and use the streaming parser for large databases
+---
+
+Chessops provides comprehensive PGN (Portable Game Notation) support, including parsing, game tree navigation, and streaming for large files.
+
+## Parsing a Simple PGN
+
+Parse PGN text into structured game objects.
+
+```typescript
+import { parsePgn } from 'chessops/pgn';
+
+const pgnText = `
+[Event "Casual Game"]
+[White "Alice"]
+[Black "Bob"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0
+`;
+
+const games = parsePgn(pgnText);
+
+console.log(`Parsed ${games.length} game(s)`);
+const game = games[0];
+
+console.log('Event:', game.headers.get('Event'));
+console.log('White:', game.headers.get('White'));
+console.log('Black:', game.headers.get('Black'));
+console.log('Result:', game.headers.get('Result'));
+```
+
+## Walking Through Moves
+
+Traverse the move tree and replay the game.
+
+<CodeGroup>
+```typescript Simple Walk
+import { parsePgn, startingPosition, walk } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+import { makeFen } from 'chessops/fen';
+
+const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6';
+const game = parsePgn(pgn)[0];
+
+// Get starting position
+const pos = startingPosition(game.headers).unwrap();
+
+// Walk through all moves
+walk(game.moves, pos, (position, node) => {
+  const move = parseSan(position, node.san);
+  if (!move) {
+    console.error(`Invalid move: ${node.san}`);
+    return false; // Stop walking
+  }
+  
+  position.play(move);
+  console.log(`${node.san}: ${makeFen(position.toSetup())}`);
+  
+  return true; // Continue walking
+});
+```
+
+```typescript With Move Numbers
+import { parsePgn, startingPosition, walk } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+
+const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6';
+const game = parsePgn(pgn)[0];
+const pos = startingPosition(game.headers).unwrap();
+
+let ply = 0;
+walk(game.moves, pos, (position, node) => {
+  ply++;
+  const moveNumber = Math.floor((ply + 1) / 2);
+  const side = position.turn === 'white' ? '.' : '...';
+  
+  console.log(`${moveNumber}${side} ${node.san}`);
+  
+  const move = parseSan(position, node.san);
+  if (move) {
+    position.play(move);
+    return true;
+  }
+  return false;
+});
+```
+</CodeGroup>
+
+## Working with Headers
+
+Access and manipulate PGN headers.
+
+```typescript
+import { parsePgn, emptyHeaders } from 'chessops/pgn';
+
+const pgn = `
+[Event "World Championship"]
+[Site "London"]
+[Date "2023.04.15"]
+[Round "1"]
+[White "Carlsen, Magnus"]
+[Black "Nepomniachtchi, Ian"]
+[Result "1-0"]
+[ECO "C84"]
+[WhiteElo "2865"]
+[BlackElo "2795"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+`;
+
+const game = parsePgn(pgn)[0];
+
+// Access standard headers
+console.log('Event:', game.headers.get('Event'));
+console.log('Date:', game.headers.get('Date'));
+console.log('White ELO:', game.headers.get('WhiteElo'));
+console.log('Black ELO:', game.headers.get('BlackElo'));
+console.log('Opening:', game.headers.get('ECO'));
+
+// Iterate through all headers
+for (const [key, value] of game.headers) {
+  console.log(`${key}: ${value}`);
+}
+
+// Create custom headers
+const customHeaders = emptyHeaders();
+customHeaders.set('Event', 'My Tournament');
+customHeaders.set('White', 'Player 1');
+customHeaders.set('Black', 'Player 2');
+```
+
+## Streaming Large PGN Files
+
+Efficiently parse large PGN databases without loading everything into memory.
+
+```typescript
+import { createReadStream } from 'fs';
+import { PgnParser } from 'chessops/pgn';
+import { startingPosition, walk } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+
+const status = {
+  games: 0,
+  errors: 0,
+  moves: 0,
+};
+
+const stream = createReadStream('games.pgn', { encoding: 'utf-8' });
+
+const parser = new PgnParser((game, err) => {
+  status.games++;
+  
+  if (err) {
+    console.error('Parse error:', err);
+    status.errors++;
+    return;
+  }
+  
+  // Process each game as it's parsed
+  startingPosition(game.headers).unwrap(
+    pos => {
+      walk(game.moves, pos, (position, node) => {
+        const move = parseSan(position, node.san);
+        if (!move) {
+          console.error(`Invalid move in game ${status.games}:`, node.san);
+          status.errors++;
+          return false;
+        }
+        
+        position.play(move);
+        status.moves++;
+        return true;
+      });
+    },
+    err => {
+      console.error('Invalid starting position:', err);
+      status.errors++;
+    }
+  );
+  
+  // Progress indicator
+  if (status.games % 1000 === 0) {
+    console.log(`Processed ${status.games} games, ${status.moves} moves`);
+  }
+});
+
+await new Promise<void>(resolve => {
+  stream
+    .on('data', (chunk: string) => {
+      parser.parse(chunk, { stream: true });
+    })
+    .on('close', () => {
+      parser.parse(''); // Flush remaining data
+      console.log('Final stats:', status);
+      resolve();
+    });
+});
+```
+
+## Working with Variations
+
+Handle games with alternative move sequences.
+
+```typescript
+import { parsePgn } from 'chessops/pgn';
+
+const pgnWithVariations = `
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 
+(3... Nf6 4. O-O Nxe4 5. d4 Be7)
+4. Ba4 Nf6 5. O-O Be7
+(5... Nxe4 6. d4 b5 7. Bb3 d5 8. dxe5 Be6)
+6. Re1 b5 7. Bb3 d6 8. c3 O-O
+`;
+
+const game = parsePgn(pgnWithVariations)[0];
+
+function printTree(node: any, depth = 0) {
+  const indent = '  '.repeat(depth);
+  
+  for (const child of node.children) {
+    console.log(`${indent}${child.san}`);
+    
+    // Print all variations
+    if (child.children.length > 1) {
+      console.log(`${indent}(Variations:)`);
+      for (let i = 1; i < child.children.length; i++) {
+        console.log(`${indent}  Variation ${i}:`);
+        printTree({ children: [child.children[i]] }, depth + 2);
+      }
+      // Continue with main line
+      if (child.children.length > 0) {
+        printTree({ children: [child.children[0]] }, depth);
+      }
+      return;
+    }
+    
+    printTree(child, depth);
+  }
+}
+
+printTree(game.moves);
+```
+
+## Parsing Comments and Annotations
+
+Extract comments, evaluations, clocks, and drawing annotations.
+
+```typescript
+import { parsePgn, parseComment } from 'chessops/pgn';
+
+const pgnWithComments = `
+1. e4 { [%eval 0.3] [%clk 1:30:00] } e5 
+2. Nf3 { A classical opening. [%cal Gf3e5] [%csl Ge5] } Nc6 
+3. Bb5 { [%eval 0.25,18] The Ruy Lopez! } a6
+`;
+
+const game = parsePgn(pgnWithComments)[0];
+
+for (const node of game.moves.mainline()) {
+  console.log(`Move: ${node.san}`);
+  
+  if (node.comments) {
+    for (const comment of node.comments) {
+      const parsed = parseComment(comment);
+      
+      if (parsed.text) {
+        console.log(`  Comment: ${parsed.text}`);
+      }
+      if (parsed.evaluation) {
+        if ('pawns' in parsed.evaluation) {
+          console.log(`  Evaluation: ${parsed.evaluation.pawns} pawns`);
+          if (parsed.evaluation.depth) {
+            console.log(`    (depth ${parsed.evaluation.depth})`);
+          }
+        } else if ('mate' in parsed.evaluation) {
+          console.log(`  Mate in: ${parsed.evaluation.mate}`);
+        }
+      }
+      if (parsed.clock) {
+        console.log(`  Clock: ${parsed.clock}s`);
+      }
+      if (parsed.emt) {
+        console.log(`  Time spent: ${parsed.emt}s`);
+      }
+      if (parsed.shapes && parsed.shapes.length > 0) {
+        console.log(`  Shapes: ${parsed.shapes.length} annotations`);
+      }
+    }
+  }
+}
+```
+
+## Creating PGN from Games
+
+Generate PGN text from game objects.
+
+```typescript
+import { makePgn, emptyHeaders, Node, ChildNode } from 'chessops/pgn';
+
+// Build a game tree
+const root = new Node();
+
+const e4 = new ChildNode({ san: 'e4' });
+const e5 = new ChildNode({ san: 'e5' });
+const nf3 = new ChildNode({ san: 'Nf3' });
+const nc6 = new ChildNode({ san: 'Nc6' });
+
+root.children.push(e4);
+e4.children.push(e5);
+e5.children.push(nf3);
+nf3.children.push(nc6);
+
+// Add a variation
+const nf6 = new ChildNode({ 
+  san: 'Nf6',
+  comments: ['Petrov Defense']
+});
+e5.children.push(nf6); // Alternative to Nf3
+
+// Create headers
+const headers = emptyHeaders();
+headers.set('Event', 'Example Game');
+headers.set('White', 'Alice');
+headers.set('Black', 'Bob');
+headers.set('Result', '*');
+
+// Generate PGN
+const pgn = makePgn({ headers, moves: root });
+console.log(pgn);
+// Output:
+// [Event "Example Game"]
+// [White "Alice"]
+// [Black "Bob"]
+// [Result "*"]
+//
+// 1. e4 e5 2. Nf3 ( 2... Nf6 { Petrov Defense } ) 2... Nc6 *
+```
+
+## Transforming Game Trees
+
+Augment game tree nodes with custom data (e.g., positions, evaluations).
+
+```typescript
+import { parsePgn, startingPosition, transform } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+import { makeFen } from 'chessops/fen';
+
+interface ExtendedNodeData {
+  san: string;
+  fen: string;
+  legalMoves?: number;
+}
+
+const pgn = '1. e4 e5 2. Nf3 (2. f4 exf4) 2... Nc6';
+const game = parsePgn(pgn)[0];
+
+const transformedTree = transform(
+  game.moves,
+  startingPosition(game.headers).unwrap(),
+  (pos, data) => {
+    const move = parseSan(pos, data.san);
+    if (!move) return;
+    
+    pos.play(move);
+    
+    // Count legal moves in resulting position
+    let legalMoves = 0;
+    for (const _m of pos.legalMoves()) {
+      legalMoves++;
+    }
+    
+    return {
+      san: data.san,
+      fen: makeFen(pos.toSetup()),
+      legalMoves,
+    };
+  }
+);
+
+// Walk the transformed tree
+for (const node of transformedTree.mainline()) {
+  console.log(`${node.data.san}:`);
+  console.log(`  FEN: ${node.data.fen}`);
+  console.log(`  Legal moves: ${node.data.legalMoves}`);
+}
+```
+
+## Handling NAGs (Numeric Annotation Glyphs)
+
+Work with move annotations like !!, ?, !?, etc.
+
+```typescript
+import { parsePgn } from 'chessops/pgn';
+
+const pgnWithNags = `
+1. e4! e5 2. Nf3!! Nc6?! 3. Bb5? a6! 4. Ba4?? Nf6
+`;
+
+const game = parsePgn(pgnWithNags)[0];
+
+const nagDescriptions: Record<number, string> = {
+  1: 'good move (!)',
+  2: 'poor move (?)',
+  3: 'brilliant move (!!)',
+  4: 'blunder (??)',
+  5: 'interesting move (!?)',
+  6: 'dubious move (?!)',
+};
+
+for (const node of game.moves.mainline()) {
+  let annotation = '';
+  if (node.nags && node.nags.length > 0) {
+    const nag = node.nags[0];
+    annotation = ` ${nagDescriptions[nag] || `NAG ${nag}`}`;
+  }
+  console.log(`${node.san}${annotation}`);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Usage" icon="play" href="/examples/basic-usage">
+    Learn the fundamentals of position creation and moves
+  </Card>
+  <Card title="Position Analysis" icon="magnifying-glass" href="/examples/position-analysis">
+    Analyze positions for checks, checkmate, and material
+  </Card>
+</CardGroup>

@@ -1,0 +1,352 @@
+---
+title: Atomic Chess
+description: Atomic chess variant where captures cause explosions
+icon: atom
+---
+
+Atomic chess is a variant where captures cause explosions that destroy surrounding pieces. The game ends immediately when a king is captured/exploded.
+
+## Overview
+
+In Atomic chess:
+- Captures cause explosions in a 3x3 area (king attacks pattern)
+- Pawns survive explosions
+- All other pieces in the blast radius are destroyed
+- The capturing piece is also destroyed
+- Kings can be captured (exploded), ending the game immediately
+- You can move into check if it would explode the opponent's king
+- No castling through squares attacked by the opponent's king
+
+## Basic Usage
+
+```typescript
+import { Atomic } from 'chessops/variant';
+
+// Create a new Atomic position
+const pos = Atomic.default();
+
+// Play a normal move
+pos.play({ from: 12, to: 28 }); // e2-e4
+
+// After a capture, pieces explode
+pos.play({ from: 51, to: 35 }); // d7-d5
+pos.play({ from: 28, to: 35 }); // e4xd5 - explosion!
+
+// Check if game ended via explosion
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  console.log('Winner:', outcome?.winner);
+}
+```
+
+## Explosions
+
+The explosion mechanic is implemented in `playCaptureAt()`:
+
+```typescript
+// When a capture occurs:
+// 1. The captured piece is removed
+// 2. The capturing piece is removed
+// 3. All non-pawn pieces in kingAttacks(square) are removed
+
+const pos = Atomic.default();
+pos.play({ from: 12, to: 28 }); // e2-e4
+pos.play({ from: 51, to: 35 }); // d7-d5  
+pos.play({ from: 28, to: 35 }); // e4xd5
+
+// After exd5:
+// - Pawn on e4 is destroyed (capturing piece)
+// - Pawn on d5 is destroyed (captured piece)
+// - All non-pawn pieces adjacent to d5 are destroyed
+// - Pawns in the blast radius survive
+```
+
+### Explosion Implementation
+
+From variant.ts:163-170:
+
+```typescript
+protected playCaptureAt(square: Square, captured: Piece): void {
+  super.playCaptureAt(square, captured);
+  this.board.take(square);
+  for (const explode of kingAttacks(square).intersect(this.board.occupied).diff(this.board.pawn)) {
+    const piece = this.board.take(explode);
+    if (piece?.role === 'rook') this.castles.discardRook(explode);
+    if (piece?.role === 'king') this.castles.discardColor(piece.color);
+  }
+}
+```
+
+<Note>
+Pawns are immune to explosions! The explosion only affects pieces in `kingAttacks(square).diff(this.board.pawn)`.
+</Note>
+
+## Win Conditions
+
+The game ends when a king is exploded:
+
+```typescript
+import { Atomic } from 'chessops/variant';
+
+const pos = Atomic.default();
+
+// Check if game ended via king explosion
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  
+  if (outcome?.winner === 'white') {
+    console.log('Black king exploded!');
+  } else if (outcome?.winner === 'black') {
+    console.log('White king exploded!');
+  }
+}
+```
+
+Variant outcome logic from variant.ts:231-236:
+
+```typescript
+variantOutcome(_ctx?: Context): Outcome | undefined {
+  for (const color of COLORS) {
+    if (this.board.pieces(color, 'king').isEmpty()) {
+      return { winner: opposite(color) };
+    }
+  }
+  return;
+}
+```
+
+## King Attackers
+
+Atomic has special rules for king attackers:
+
+```typescript
+const pos = Atomic.default();
+
+// Kings cannot attack each other (would both explode)
+// If kings are adjacent, kingAttackers returns empty
+```
+
+From variant.ts:154-160:
+
+```typescript
+kingAttackers(square: Square, attacker: Color, occupied: SquareSet): SquareSet {
+  const attackerKings = this.board.pieces(attacker, 'king');
+  if (attackerKings.isEmpty() || kingAttacks(square).intersects(attackerKings)) {
+    return SquareSet.empty();
+  }
+  return super.kingAttackers(square, attacker, occupied);
+}
+```
+
+<Warning>
+In Atomic chess, kings cannot give check to each other. If they're adjacent, `kingAttackers()` returns an empty set.
+</Warning>
+
+## Legal Moves
+
+Move generation accounts for explosions:
+
+```typescript
+import { Atomic } from 'chessops/variant';
+import { parseSquare } from 'chessops';
+
+const pos = Atomic.default();
+const square = parseSquare('e2')!;
+
+// Get legal moves (accounts for explosions)
+const dests = pos.dests(square);
+
+// A move is legal if:
+// 1. After the move, our king exists, AND
+// 2. Either opponent's king is gone OR our king is not in check
+```
+
+From variant.ts:209-225:
+
+```typescript
+dests(square: Square, ctx?: Context): SquareSet {
+  ctx = ctx || this.ctx();
+  let dests = SquareSet.empty();
+  for (const to of pseudoDests(this, square, ctx)) {
+    const after = this.clone();
+    after.play({ from: square, to });
+    const ourKing = after.board.kingOf(this.turn);
+    if (
+      defined(ourKing)
+      && (!defined(after.board.kingOf(after.turn))
+        || after.kingAttackers(ourKing, after.turn, after.board.occupied).isEmpty())
+    ) {
+      dests = dests.with(to);
+    }
+  }
+  return dests;
+}
+```
+
+## Validation
+
+Atomic has relaxed king validation:
+
+```typescript
+import { Atomic } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen(
+  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+).unwrap();
+
+const result = Atomic.fromSetup(setup);
+
+if (result.isErr) {
+  // Possible errors:
+  // - Empty board
+  // - More than 2 kings
+  // - Opponent's king in check
+  // - Pawns on backrank
+}
+```
+
+Validation from variant.ts:139-152:
+
+```typescript
+protected validate(): Result<undefined, PositionError> {
+  // Like chess, but allow our king to be missing.
+  if (this.board.occupied.isEmpty()) 
+    return Result.err(new PositionError(IllegalSetup.Empty));
+  if (this.board.king.size() > 2) 
+    return Result.err(new PositionError(IllegalSetup.Kings));
+  const otherKing = this.board.kingOf(opposite(this.turn));
+  if (!defined(otherKing)) 
+    return Result.err(new PositionError(IllegalSetup.Kings));
+  if (this.kingAttackers(otherKing, this.turn, this.board.occupied).nonEmpty()) {
+    return Result.err(new PositionError(IllegalSetup.OppositeCheck));
+  }
+  if (SquareSet.backranks().intersects(this.board.pawn)) {
+    return Result.err(new PositionError(IllegalSetup.PawnsOnBackrank));
+  }
+  return Result.ok(undefined);
+}
+```
+
+<Note>
+Unlike standard chess, Atomic allows positions where the current player's king is missing (it was exploded).
+</Note>
+
+## Insufficient Material
+
+Atomic has complex insufficient material rules:
+
+```typescript
+const pos = Atomic.default();
+
+const isInsufficient = pos.hasInsufficientMaterial('white');
+
+// Insufficient material considers:
+// - If enemy king is already exploded (always sufficient)
+// - Bare king cannot mate
+// - Enemy pieces can explode near their own king
+// - Special cases for bishops on same color squares
+```
+
+Key cases from variant.ts:172-207:
+
+- If enemy king is gone, NOT insufficient material
+- Bare king (only king remaining) IS insufficient
+- If enemy has pieces near their king, they might self-explode (NOT insufficient)
+- Special bishop cases: opposite color bishops cannot explode each other
+- Queen or pawn can always mate (pawn promotes)
+- Single knight/bishop/rook is insufficient
+- 2+ knights can mate if enemy has pieces to block
+
+## Complete Example
+
+```typescript
+import { Atomic } from 'chessops/variant';
+import { parseSquare, makeFen } from 'chessops/fen';
+
+// Start a game
+const pos = Atomic.default();
+
+console.log('Starting position:');
+console.log(makeFen(pos.toSetup()));
+
+// Play the Atomic Gambit
+pos.play({ from: parseSquare('e2')!, to: parseSquare('e4')! });
+pos.play({ from: parseSquare('e7')!, to: parseSquare('e5')! });
+pos.play({ from: parseSquare('g1')!, to: parseSquare('f3')! });
+pos.play({ from: parseSquare('f8')!, to: parseSquare('c5')! });
+pos.play({ from: parseSquare('f3')!, to: parseSquare('e5')! }); // Capture!
+
+// After Nxe5, explosion occurs:
+// - Knight on f3 explodes (capturing piece)
+// - Pawn on e5 explodes (captured piece)  
+// - King on e8 might be in blast radius!
+
+if (pos.isVariantEnd()) {
+  console.log('Game over!');
+  const outcome = pos.variantOutcome();
+  console.log('Winner:', outcome?.winner);
+} else {
+  console.log('Game continues');
+  console.log(makeFen(pos.toSetup()));
+}
+
+// Check legal moves for a piece
+const e2 = parseSquare('e2')!;
+const moves = pos.dests(e2);
+console.log(`Pawn on e2 has ${moves.size()} legal moves`);
+
+// Clone for analysis
+const analysis = pos.clone();
+for (const square of pos.board.occupied) {
+  const dests = analysis.dests(square);
+  if (dests.nonEmpty()) {
+    console.log(`Piece on ${square} can move to ${dests.size()} squares`);
+  }
+}
+```
+
+## Strategic Implications
+
+### Attacking the King
+
+You can move into "check" if it explodes the opponent's king:
+
+```typescript
+// Normal chess: Cannot move into check
+// Atomic: Can "move into check" if it captures enemy king
+
+const pos = Atomic.default();
+// ... setup position where capture explodes enemy king
+
+const dests = pos.dests(square);
+// May include moves that would be illegal in standard chess
+```
+
+### Piece Values
+
+Explosion mechanics change piece values:
+- Pawns are more valuable (survive explosions)
+- Kings are vulnerable (can be captured)
+- Trading pieces near the enemy king is powerful
+
+## Key Differences from Standard Chess
+
+| Feature | Standard Chess | Atomic |
+|---------|----------------|--------|
+| Captures | Remove one piece | Explode 3x3 area |
+| Pawns | Normal | Immune to explosions |
+| Kings | Cannot be captured | Can be captured (game ends) |
+| Check | Must be resolved | Can "move into check" |
+| Material | Linear advantage | Explosive advantage |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Variant Overview" icon="chess-board" href="/variants/overview">
+    See all supported variants
+  </Card>
+  <Card title="Crazyhouse" icon="box" href="/variants/crazyhouse">
+    Another popular variant
+  </Card>
+</CardGroup>

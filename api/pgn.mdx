@@ -1,0 +1,699 @@
+---
+title: PGN
+description: Parse, transform, and write Portable Game Notation (PGN)
+---
+
+The PGN module provides comprehensive support for parsing, manipulating, and generating PGN (Portable Game Notation) files. It includes both a simple parser for trusted input and a streaming parser for handling large files with DoS protection.
+
+## Core Types
+
+### Game
+
+Represents a complete PGN game with headers and moves.
+
+```typescript
+interface Game<T> {
+  headers: Map<string, string>;
+  comments?: string[];
+  moves: Node<T>;
+}
+```
+
+<ResponseField name="headers" type="Map<string, string>">
+  Game headers (Event, Site, Date, Round, White, Black, Result, etc.)
+</ResponseField>
+
+<ResponseField name="comments" type="string[]" >
+  Comments before the first move
+</ResponseField>
+
+<ResponseField name="moves" type="Node<T>">
+  Root node of the game tree
+</ResponseField>
+
+### Node
+
+Represents a node in the game tree (root node or move node).
+
+```typescript
+class Node<T> {
+  children: ChildNode<T>[] = [];
+  
+  mainlineNodes(): Iterable<ChildNode<T>>;
+  mainline(): Iterable<T>;
+  end(): Node<T>;
+}
+```
+
+<ResponseField name="children" type="ChildNode<T>[]">
+  Child nodes (variations)
+</ResponseField>
+
+<ResponseField name="mainlineNodes()" type="Iterable<ChildNode<T>>">
+  Iterates through the mainline nodes (first variation at each position)
+</ResponseField>
+
+<ResponseField name="mainline()" type="Iterable<T>">
+  Iterates through the mainline data (first variation at each position)
+</ResponseField>
+
+<ResponseField name="end()" type="Node<T>">
+  Returns the last node in the mainline
+</ResponseField>
+
+### ChildNode
+
+Represents a move node in the game tree.
+
+```typescript
+class ChildNode<T> extends Node<T> {
+  constructor(public data: T);
+}
+```
+
+<ResponseField name="data" type="T">
+  The move data (typically PgnNodeData)
+</ResponseField>
+
+### PgnNodeData
+
+Standard data stored in PGN nodes.
+
+```typescript
+interface PgnNodeData {
+  san: string;
+  startingComments?: string[];
+  comments?: string[];
+  nags?: number[];
+}
+```
+
+<ResponseField name="san" type="string" required>
+  The move in SAN notation
+</ResponseField>
+
+<ResponseField name="startingComments" type="string[]">
+  Comments before the move
+</ResponseField>
+
+<ResponseField name="comments" type="string[]">
+  Comments after the move
+</ResponseField>
+
+<ResponseField name="nags" type="number[]">
+  Numeric Annotation Glyphs (NAGs): $1 (!), $2 (?), etc.
+</ResponseField>
+
+## Parsing Functions
+
+### parsePgn
+
+Parses a PGN string into an array of games.
+
+```typescript
+import { parsePgn } from 'chessops/pgn';
+
+const pgn = `
+[Event "F/S Return Match"]
+[Site "Belgrade, Serbia JUG"]
+[Date "1992.11.04"]
+[Round "29"]
+[White "Fischer, Robert J."]
+[Black "Spassky, Boris V."]
+[Result "1/2-1/2"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1/2-1/2
+`;
+
+const games = parsePgn(pgn);
+console.log(games.length); // 1
+console.log(games[0].headers.get('White')); // 'Fischer, Robert J.'
+
+for (const node of games[0].moves.mainline()) {
+  console.log(node.san); // 'e4', 'e5', 'Nf3', ...
+}
+```
+
+<ParamField path="pgn" type="string" required>
+  The PGN string to parse
+</ParamField>
+
+<ParamField path="initHeaders" type="() => Map<string, string>">
+  Optional function to initialize headers. Defaults to `defaultHeaders()`
+</ParamField>
+
+<ResponseField name="return" type="Game<PgnNodeData>[]">
+  Array of parsed games
+</ResponseField>
+
+<Note>
+This parser is permissive and will skip invalid tokens. Use `PgnParser` for stricter control and DoS protection.
+</Note>
+
+### PgnParser
+
+Streaming parser with DoS protection for parsing large PGN files.
+
+```typescript
+import { createReadStream } from 'fs';
+import { PgnParser } from 'chessops/pgn';
+
+const stream = createReadStream('games.pgn', { encoding: 'utf-8' });
+
+const parser = new PgnParser((game, err) => {
+  if (err) {
+    console.error('Budget exceeded:', err.message);
+    stream.destroy(err);
+    return;
+  }
+  
+  // Process game
+  console.log(game.headers.get('White'), 'vs', game.headers.get('Black'));
+});
+
+await new Promise<void>(resolve =>
+  stream
+    .on('data', (chunk: string) => parser.parse(chunk, { stream: true }))
+    .on('close', () => {
+      parser.parse(''); // Flush remaining data
+      resolve();
+    })
+);
+```
+
+<ParamField path="emitGame" type="(game: Game<PgnNodeData>, err: PgnError | undefined) => void" required>
+  Callback invoked for each parsed game or error
+</ParamField>
+
+<ParamField path="initHeaders" type="() => Map<string, string>">
+  Optional function to initialize headers. Defaults to `defaultHeaders()`
+</ParamField>
+
+<ParamField path="maxBudget" type="number">
+  Maximum complexity budget per game (default: 1,000,000)
+</ParamField>
+
+#### parse
+
+Parses a chunk of PGN data.
+
+```typescript
+parser.parse(chunk: string, options?: ParseOptions): void
+```
+
+<ParamField path="chunk" type="string" required>
+  The chunk of PGN data to parse
+</ParamField>
+
+<ParamField path="options" type="ParseOptions">
+  - `stream?: boolean` - If true, waits for more data before emitting final game
+</ParamField>
+
+### PgnError
+
+Error class for PGN parsing failures.
+
+```typescript
+class PgnError extends Error {}
+```
+
+## Generation Functions
+
+### makePgn
+
+Generates a PGN string from a game.
+
+```typescript
+import { makePgn, defaultGame } from 'chessops/pgn';
+
+const game = defaultGame();
+game.headers.set('White', 'Carlsen, Magnus');
+game.headers.set('Black', 'Nepomniachtchi, Ian');
+
+const move1 = new ChildNode({ san: 'e4' });
+const move2 = new ChildNode({ san: 'e5' });
+move1.children.push(move2);
+game.moves.children.push(move1);
+
+const pgn = makePgn(game);
+console.log(pgn);
+```
+
+<ParamField path="game" type="Game<PgnNodeData>" required>
+  The game to convert to PGN. Each node must have at least a `san` property.
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The PGN string representation
+</ResponseField>
+
+## Game Tree Functions
+
+### transform
+
+Transforms a game tree by applying a function to each node.
+
+```typescript
+import { transform } from 'chessops/pgn';
+import { parseSan, makeSanAndPlay } from 'chessops/san';
+import { makeFen } from 'chessops/fen';
+import { Box } from 'chessops/pgn';
+
+const pos = startingPosition(game.headers).unwrap();
+
+game.moves = transform(game.moves, new Box(pos), (box, node) => {
+  const move = parseSan(box.value, node.san);
+  if (!move) {
+    // Invalid move - cut off tree here
+    return;
+  }
+  
+  const san = makeSanAndPlay(box.value, move);
+  
+  return {
+    ...node,
+    san, // Normalized SAN
+    fen: makeFen(box.value.toSetup()), // Add FEN annotation
+  };
+});
+```
+
+<ParamField path="node" type="Node<T>" required>
+  The root node to transform
+</ParamField>
+
+<ParamField path="ctx" type="C extends { clone(): C }" required>
+  Context object that will be cloned at variations. Use `Box<T>` for simple contexts.
+</ParamField>
+
+<ParamField path="f" type="(ctx: C, data: T, childIndex: number) => U | undefined" required>
+  Transformation function. Return undefined to cut off the tree at this point.
+</ParamField>
+
+<ResponseField name="return" type="Node<U>">
+  The transformed game tree
+</ResponseField>
+
+---
+
+### walk
+
+Walks through a game tree, visiting each node.
+
+```typescript
+import { walk, Box } from 'chessops/pgn';
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+
+walk(game.moves, new Box(pos), (box, node) => {
+  const move = parseSan(box.value, node.san);
+  if (!move) {
+    console.log('Illegal move:', node.san);
+    return false; // Stop walking this variation
+  }
+  
+  box.value.play(move);
+  console.log(node.san, makeFen(box.value.toSetup()));
+  
+  return true; // Continue walking
+});
+```
+
+<ParamField path="node" type="Node<T>" required>
+  The root node to walk
+</ParamField>
+
+<ParamField path="ctx" type="C extends { clone(): C }" required>
+  Context object that will be cloned at variations
+</ParamField>
+
+<ParamField path="f" type="(ctx: C, data: T, childIndex: number) => boolean | void" required>
+  Visitor function. Return false to stop walking this branch.
+</ParamField>
+
+---
+
+### extend
+
+Extends a node by appending moves to the mainline.
+
+```typescript
+import { extend, ChildNode } from 'chessops/pgn';
+
+const game = defaultGame();
+const moves = [
+  { san: 'e4' },
+  { san: 'e5' },
+  { san: 'Nf3' },
+];
+
+const endNode = extend(game.moves, moves);
+console.log(endNode instanceof ChildNode); // true
+```
+
+<ParamField path="node" type="Node<T>" required>
+  The node to extend from
+</ParamField>
+
+<ParamField path="data" type="T[]" required>
+  Array of data to append as moves
+</ParamField>
+
+<ResponseField name="return" type="Node<T>">
+  The last node in the extended chain
+</ResponseField>
+
+---
+
+### isChildNode
+
+Type guard to check if a node is a ChildNode (has data).
+
+```typescript
+import { isChildNode } from 'chessops/pgn';
+
+if (isChildNode(node)) {
+  console.log(node.data.san); // TypeScript knows node has data
+}
+```
+
+<ParamField path="node" type="Node<T>" required>
+  The node to check
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if the node is a ChildNode
+</ResponseField>
+
+## Variant Functions
+
+### parseVariant
+
+Parses a variant name into a Rules type.
+
+```typescript
+import { parseVariant } from 'chessops/pgn';
+
+console.log(parseVariant('Standard')); // 'chess'
+console.log(parseVariant('Crazyhouse')); // 'crazyhouse'
+console.log(parseVariant('King of the Hill')); // 'kingofthehill'
+console.log(parseVariant('Unknown')); // undefined
+```
+
+<ParamField path="variant" type="string | undefined" required>
+  The variant name to parse
+</ParamField>
+
+<ResponseField name="return" type="Rules | undefined">
+  The parsed Rules, or undefined if unrecognized
+</ResponseField>
+
+---
+
+### makeVariant
+
+Converts a Rules type to a variant name.
+
+```typescript
+import { makeVariant } from 'chessops/pgn';
+
+console.log(makeVariant('chess')); // undefined (standard chess, no variant header needed)
+console.log(makeVariant('crazyhouse')); // 'Crazyhouse'
+console.log(makeVariant('kingofthehill')); // 'King of the Hill'
+```
+
+<ParamField path="rules" type="Rules" required>
+  The rules to convert
+</ParamField>
+
+<ResponseField name="return" type="string | undefined">
+  The variant name, or undefined for standard chess
+</ResponseField>
+
+---
+
+### startingPosition
+
+Creates a position from PGN headers.
+
+```typescript
+import { startingPosition } from 'chessops/pgn';
+
+const headers = new Map([
+  ['Variant', 'Crazyhouse'],
+  ['FEN', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 0 1'],
+]);
+
+const result = startingPosition(headers);
+if (result.isOk) {
+  const pos = result.value;
+  console.log(pos.rules); // 'crazyhouse'
+}
+```
+
+<ParamField path="headers" type="Map<string, string>" required>
+  Game headers (checks Variant and FEN headers)
+</ParamField>
+
+<ResponseField name="return" type="Result<Position, FenError | PositionError>">
+  The starting position, or an error
+</ResponseField>
+
+---
+
+### setStartingPosition
+
+Sets the variant and FEN headers based on a position.
+
+```typescript
+import { setStartingPosition } from 'chessops/pgn';
+import { Crazyhouse } from 'chessops/variant';
+
+const headers = new Map();
+const pos = Crazyhouse.default();
+
+setStartingPosition(headers, pos);
+console.log(headers.get('Variant')); // 'Crazyhouse'
+console.log(headers.has('FEN')); // false (default position)
+```
+
+<ParamField path="headers" type="Map<string, string>" required>
+  Game headers to modify
+</ParamField>
+
+<ParamField path="pos" type="Position" required>
+  The position to use
+</ParamField>
+
+## Comment Annotations
+
+### Comment
+
+Parsed comment with embedded annotations.
+
+```typescript
+interface Comment {
+  text: string;
+  shapes: CommentShape[];
+  clock?: number;
+  emt?: number;
+  evaluation?: Evaluation;
+}
+```
+
+### CommentShape
+
+Arrow or circle annotation.
+
+```typescript
+interface CommentShape {
+  color: 'green' | 'red' | 'yellow' | 'blue';
+  from: Square;
+  to: Square; // Same as from for circles
+}
+```
+
+### parseComment
+
+Parses a comment string, extracting annotations.
+
+```typescript
+import { parseComment } from 'chessops/pgn';
+
+const comment = parseComment(
+  'Great move! [%csl Gf3] [%cal Ra1h8] [%eval +1.5,18] [%clk 1:30:00]'
+);
+
+console.log(comment.text); // 'Great move!'
+console.log(comment.shapes.length); // 2 (circle on f3, arrow a1-h8)
+console.log(comment.evaluation); // { pawns: 1.5, depth: 18 }
+console.log(comment.clock); // 5400 (seconds)
+```
+
+<ParamField path="comment" type="string" required>
+  The comment string to parse
+</ParamField>
+
+<ResponseField name="return" type="Comment">
+  Parsed comment with extracted annotations
+</ResponseField>
+
+---
+
+### makeComment
+
+Generates a comment string with annotations.
+
+```typescript
+import { makeComment } from 'chessops/pgn';
+
+const comment = makeComment({
+  text: 'Brilliant move',
+  shapes: [
+    { color: 'green', from: 21, to: 21 }, // Circle on f3
+    { color: 'red', from: 0, to: 63 },     // Arrow a1 to h8
+  ],
+  evaluation: { pawns: 2.5, depth: 20 },
+  clock: 1800, // 30 minutes
+});
+
+console.log(comment);
+// 'Brilliant move [%csl Gf3] [%cal Ra1h8] [%eval 2.50,20] [%clk 0:30:00.000]'
+```
+
+<ParamField path="comment" type="Partial<Comment>" required>
+  Comment data to convert
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The comment string with embedded annotations
+</ResponseField>
+
+## Helper Functions
+
+### defaultGame
+
+Creates a new game with default headers.
+
+```typescript
+import { defaultGame } from 'chessops/pgn';
+
+const game = defaultGame();
+console.log(game.headers.get('Event')); // '?'
+console.log(game.headers.get('Result')); // '*'
+```
+
+### defaultHeaders
+
+Creates default PGN headers.
+
+```typescript
+import { defaultHeaders } from 'chessops/pgn';
+
+const headers = defaultHeaders();
+// Returns Map with: Event, Site, Date, Round, White, Black, Result
+```
+
+### emptyHeaders
+
+Creates an empty headers map.
+
+```typescript
+import { emptyHeaders } from 'chessops/pgn';
+
+const headers = emptyHeaders();
+console.log(headers.size); // 0
+```
+
+### makeOutcome
+
+Converts an Outcome to PGN result notation.
+
+```typescript
+import { makeOutcome } from 'chessops/pgn';
+
+console.log(makeOutcome({ winner: 'white' })); // '1-0'
+console.log(makeOutcome({ winner: 'black' })); // '0-1'
+console.log(makeOutcome({ winner: undefined })); // '1/2-1/2'
+console.log(makeOutcome(undefined)); // '*'
+```
+
+### parseOutcome
+
+Parses a PGN result string.
+
+```typescript
+import { parseOutcome } from 'chessops/pgn';
+
+console.log(parseOutcome('1-0')); // { winner: 'white' }
+console.log(parseOutcome('0-1')); // { winner: 'black' }
+console.log(parseOutcome('1/2-1/2')); // { winner: undefined }
+console.log(parseOutcome('*')); // undefined
+```
+
+### Box
+
+Simple wrapper for cloneable context in transform/walk.
+
+```typescript
+import { Box } from 'chessops/pgn';
+
+const box = new Box(someValue);
+const cloned = box.clone(); // Creates shallow copy
+```
+
+## Usage Examples
+
+### Parsing and Validating a Game
+
+```typescript
+import { parsePgn, startingPosition } from 'chessops/pgn';
+import { parseSan } from 'chessops/san';
+
+const games = parsePgn(pgnString);
+
+for (const game of games) {
+  const pos = startingPosition(game.headers).unwrap();
+  
+  for (const node of game.moves.mainline()) {
+    const move = parseSan(pos, node.san);
+    if (!move) {
+      console.log('Illegal move:', node.san);
+      break;
+    }
+    pos.play(move);
+  }
+  
+  console.log('Final position:', makeFen(pos.toSetup()));
+}
+```
+
+### Adding Computer Analysis
+
+```typescript
+import { transform, Box, makeComment } from 'chessops/pgn';
+import { parseSan, makeSanAndPlay } from 'chessops/san';
+
+// Add engine evaluation to each move
+game.moves = transform(game.moves, new Box(pos), (box, node) => {
+  const move = parseSan(box.value, node.san);
+  if (!move) return;
+  
+  makeSanAndPlay(box.value, move);
+  
+  // Simulate engine evaluation
+  const evaluation = evaluatePosition(box.value);
+  
+  const comment = makeComment({
+    text: node.comments?.[0] || '',
+    evaluation,
+  });
+  
+  return {
+    ...node,
+    comments: [comment],
+  };
+});
+```

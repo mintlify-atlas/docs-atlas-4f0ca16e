@@ -1,0 +1,279 @@
+---
+title: Crazyhouse
+description: Crazyhouse variant with pockets and piece drops
+icon: box
+---
+
+Crazyhouse is a chess variant where captured pieces can be dropped back on the board. Captured pieces are stored in "pockets" and can be placed on any empty square as a move.
+
+## Overview
+
+In Crazyhouse:
+- Captured pieces go into your pocket
+- You can drop pieces from your pocket instead of making a normal move
+- Pawns cannot be dropped on the 1st or 8th rank
+- Promoted pieces revert to pawns when captured
+- Kings cannot be in pockets
+
+## Basic Usage
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+
+// Create a new Crazyhouse position
+const pos = Crazyhouse.default();
+
+// Play a normal move
+pos.play({ from: 12, to: 28 }); // e2-e4
+
+// After capturing, check pockets
+if (pos.pockets) {
+  console.log('White pocket:', pos.pockets.white);
+  console.log('Black pocket:', pos.pockets.black);
+}
+```
+
+## Pockets
+
+The `pockets` property tracks captured pieces for both sides:
+
+```typescript
+const pos = Crazyhouse.default();
+
+// Access pockets
+if (pos.pockets) {
+  // Count specific pieces
+  const whitePawns = pos.pockets.white.pawn;
+  const blackKnights = pos.pockets.black.knight;
+  
+  // Total pieces in pocket
+  const whiteTotal = pos.pockets.white.size();
+  
+  // Check for specific piece types
+  const hasNonPawns = pos.pockets.white.hasNonPawns();
+  const hasPawns = pos.pockets.white.hasPawns();
+  
+  // Count any role
+  const queenCount = pos.pockets.count('queen');
+}
+```
+
+## Drop Moves
+
+Drop moves place a piece from your pocket onto an empty square:
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+import { isDrop } from 'chessops/types';
+
+const pos = Crazyhouse.default();
+
+// Get valid drop destinations
+const dropSquares = pos.dropDests();
+
+// Make a drop move
+const dropMove = {
+  role: 'knight',
+  to: 42  // f6
+};
+
+if (isDrop(dropMove)) {
+  pos.play(dropMove);
+}
+```
+
+### Drop Restrictions
+
+Drops follow specific rules implemented in `dropDests()`:
+
+```typescript
+const pos = Crazyhouse.default();
+const ctx = pos.ctx();
+
+// Get valid drop destinations
+const dropSquares = pos.dropDests(ctx);
+
+// Pawns cannot drop on backranks
+// Non-pawns can drop anywhere empty
+// When in check, can only drop to block
+```
+
+<Note>
+Pawns cannot be dropped on the 1st or 8th rank. The `dropDests()` method enforces this by intersecting with `SquareSet.backranks().complement()`.
+</Note>
+
+## Promoted Pieces
+
+Promoted pieces are tracked separately and revert to pawns when captured:
+
+```typescript
+const pos = Crazyhouse.default();
+
+// Promoted pieces are tracked
+console.log(pos.board.promoted);
+
+// When a promoted piece is captured, it goes to pocket as a pawn
+// This is handled automatically in setupUnchecked():
+// this.board.promoted = setup.board.promoted
+//   .intersect(setup.board.occupied)
+//   .diff(setup.board.king)
+//   .diff(setup.board.pawn);
+```
+
+## Creating from Setup
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+import { parseFen } from 'chessops/fen';
+import { Material } from 'chessops/setup';
+
+// Parse FEN (standard format)
+const setup = parseFen(
+  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+).unwrap();
+
+// Add pockets
+setup.pockets = Material.empty();
+setup.pockets.white.knight = 1;
+setup.pockets.black.pawn = 2;
+
+// Create position
+const result = Crazyhouse.fromSetup(setup);
+
+if (result.isOk) {
+  const pos = result.value;
+  console.log('Position created with pockets');
+}
+```
+
+## Validation
+
+Crazyhouse has specific validation rules:
+
+```typescript
+const result = Crazyhouse.fromSetup(setup);
+
+if (result.isErr) {
+  const error = result.error;
+  
+  // Possible errors:
+  // - Kings in pocket (not allowed)
+  // - Total pieces + pocket > 64
+}
+```
+
+Validation checks from the source:
+
+```typescript
+// Kings cannot be in pockets
+if (this.pockets?.count('king')) {
+  return Result.err(new PositionError(IllegalSetup.Kings));
+}
+
+// Total pieces cannot exceed 64
+if ((this.pockets?.size() || 0) + this.board.occupied.size() > 64) {
+  return Result.err(new PositionError(IllegalSetup.Variant));
+}
+```
+
+## Insufficient Material
+
+Crazyhouse has unique insufficient material rules since pieces never leave the game:
+
+```typescript
+const pos = Crazyhouse.default();
+
+// Check insufficient material
+const isInsufficient = pos.hasInsufficientMaterial('white');
+
+// Only insufficient if:
+// - Board + pockets <= 3 pieces
+// - No pawns (board or pocket)
+// - No promoted pieces
+// - No rooks or queens (board or pocket)
+```
+
+## Complete Example
+
+```typescript
+import { Crazyhouse } from 'chessops/variant';
+import { parseSquare } from 'chessops';
+import { isDrop } from 'chessops/types';
+
+// Start a game
+const pos = Crazyhouse.default();
+
+// Play some moves
+pos.play({ from: parseSquare('e2')!, to: parseSquare('e4')! });
+pos.play({ from: parseSquare('d7')!, to: parseSquare('d5')! });
+pos.play({ from: parseSquare('e4')!, to: parseSquare('d5')! }); // capture
+
+// Now white has a pawn in pocket
+if (pos.pockets) {
+  console.log('White has pawn:', pos.pockets.white.pawn === 1);
+  
+  // Get drop destinations for current player
+  const dropSquares = pos.dropDests();
+  console.log(`Can drop on ${dropSquares.size()} squares`);
+  
+  // Make a drop
+  if (dropSquares.has(parseSquare('e3')!)) {
+    pos.play({
+      role: 'pawn',
+      to: parseSquare('e3')!
+    });
+  }
+}
+
+// Clone position for analysis
+const clone = pos.clone();
+clone.play({ from: parseSquare('e7')!, to: parseSquare('e5')! });
+
+// Original position unchanged
+console.log('Position turn:', pos.turn);
+console.log('Clone turn:', clone.turn);
+```
+
+## Move Types
+
+Crazyhouse supports both normal moves and drops:
+
+```typescript
+import { Move, isDrop, isNormal } from 'chessops/types';
+
+function handleMove(move: Move) {
+  if (isDrop(move)) {
+    console.log(`Drop ${move.role} on square ${move.to}`);
+  } else if (isNormal(move)) {
+    console.log(`Move from ${move.from} to ${move.to}`);
+    if (move.promotion) {
+      console.log(`Promoting to ${move.promotion}`);
+    }
+  }
+}
+```
+
+<Warning>
+When a promoted piece is captured, it returns to the pocket as a pawn, not as the promoted piece. This is automatically handled by the `setupUnchecked()` method.
+</Warning>
+
+## Key Differences from Standard Chess
+
+| Feature | Standard Chess | Crazyhouse |
+|---------|----------------|------------|
+| Captured pieces | Removed from game | Go to pocket |
+| Move types | Normal moves only | Normal moves + drops |
+| Promoted pieces | Stay promoted | Revert to pawn when captured |
+| Piece count | Decreases | Can increase via drops |
+| Material tracking | Simple | Includes pockets |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Variant Overview" icon="chess-board" href="/variants/overview">
+    See all supported variants
+  </Card>
+  <Card title="Position Class" icon="square" href="/core/board-and-positions">
+    Base position API
+  </Card>
+</CardGroup>

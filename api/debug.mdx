@@ -1,0 +1,340 @@
+---
+title: Debug
+description: Debugging utilities for visualizing positions and running performance tests
+---
+
+The debug module provides utilities for visualizing chess positions, testing move generation, and running performance benchmarks.
+
+## Visualization Functions
+
+### squareSet
+
+Renders a SquareSet as a visual ASCII board.
+
+```typescript
+import { squareSet } from 'chessops/debug';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0, 9, 18, 27, 36, 45, 54, 63]);
+console.log(squareSet(squares));
+// . . . . . . . 1
+// . . . . . . 1 .
+// . . . . . 1 . .
+// . . . . 1 . . .
+// . . . 1 . . . .
+// . . 1 . . . . .
+// . 1 . . . . . .
+// 1 . . . . . . .
+```
+
+<ParamField path="squares" type="SquareSet" required>
+  The SquareSet to visualize
+</ParamField>
+
+<ResponseField name="return" type="string">
+  ASCII representation with '1' for occupied squares and '.' for empty squares
+</ResponseField>
+
+---
+
+### board
+
+Renders a Board as a visual ASCII board with pieces.
+
+```typescript
+import { board } from 'chessops/debug';
+import { Board } from 'chessops/board';
+
+const b = Board.default();
+console.log(board(b));
+// r n b q k b n r
+// p p p p p p p p
+// . . . . . . . .
+// . . . . . . . .
+// . . . . . . . .
+// . . . . . . . .
+// P P P P P P P P
+// R N B Q K B N R
+```
+
+<ParamField path="board" type="Board" required>
+  The Board to visualize
+</ParamField>
+
+<ResponseField name="return" type="string">
+  ASCII representation with pieces shown using standard notation (uppercase for white, lowercase for black). Promoted pieces shown with '~' suffix.
+</ResponseField>
+
+---
+
+### square
+
+Converts a square number to its algebraic notation.
+
+```typescript
+import { square } from 'chessops/debug';
+
+console.log(square(0));  // 'a1'
+console.log(square(27)); // 'e4'
+console.log(square(63)); // 'h8'
+```
+
+<ParamField path="sq" type="Square" required>
+  The square number (0-63)
+</ParamField>
+
+<ResponseField name="return" type="string">
+  Algebraic notation (e.g., 'e4')
+</ResponseField>
+
+---
+
+### piece
+
+Converts a Piece to its FEN notation.
+
+```typescript
+import { piece } from 'chessops/debug';
+
+const whiteKing = { role: 'king', color: 'white' };
+console.log(piece(whiteKing)); // 'K'
+
+const blackPawn = { role: 'pawn', color: 'black' };
+console.log(piece(blackPawn)); // 'p'
+
+const promoted = { role: 'queen', color: 'white', promoted: true };
+console.log(piece(promoted)); // 'Q~'
+```
+
+<ParamField path="piece" type="Piece" required>
+  The piece to convert
+</ParamField>
+
+<ResponseField name="return" type="string">
+  FEN notation (uppercase for white, lowercase for black, '~' suffix for promoted)
+</ResponseField>
+
+---
+
+### dests
+
+Formats a destination map for display.
+
+```typescript
+import { dests } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const ctx = pos.ctx();
+const allDests = pos.allDests(ctx);
+
+console.log(dests(allDests));
+// a2: a3 a4
+// b1: a3 c3
+// b2: b3 b4
+// c2: c3 c4
+// ...
+```
+
+<ParamField path="dests" type="Map<Square, SquareSet>" required>
+  Map from source squares to destination squares
+</ParamField>
+
+<ResponseField name="return" type="string">
+  Formatted string showing all legal moves from each square
+</ResponseField>
+
+## Performance Testing
+
+### perft
+
+Performs a performance test by counting all possible positions at a given depth.
+
+```typescript
+import { perft } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+// Count positions at depth 1
+const depth1 = perft(pos, 1);
+console.log(depth1); // 20 (20 possible first moves)
+
+// Count positions at depth 2
+const depth2 = perft(pos, 2);
+console.log(depth2); // 400 (20 * 20)
+
+// Count positions at depth 3
+const depth3 = perft(pos, 3);
+console.log(depth3); // 8902
+
+// With logging
+perft(pos, 1, true);
+// e2e3 1
+// e2e4 1
+// d2d3 1
+// ...
+```
+
+<ParamField path="pos" type="Position" required>
+  The starting position
+</ParamField>
+
+<ParamField path="depth" type="number" required>
+  The search depth (number of plies)
+</ParamField>
+
+<ParamField path="log" type="boolean">
+  If true, logs each move and its node count (default: false)
+</ParamField>
+
+<ResponseField name="return" type="number">
+  Total number of leaf nodes at the given depth
+</ResponseField>
+
+<Note>
+Perft is useful for testing move generation correctness and performance. Standard perft values for the starting position:
+- Depth 1: 20
+- Depth 2: 400
+- Depth 3: 8,902
+- Depth 4: 197,281
+- Depth 5: 4,865,609
+- Depth 6: 119,060,324
+</Note>
+
+## Usage Examples
+
+### Debugging Position State
+
+```typescript
+import { board, squareSet } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+console.log('Starting position:');
+console.log(board(pos.board));
+
+const move = parseSan(pos, 'e4')!;
+pos.play(move);
+
+console.log('\nAfter 1. e4:');
+console.log(board(pos.board));
+
+console.log('\nWhite pieces:');
+console.log(squareSet(pos.board.white));
+```
+
+### Visualizing Attacks
+
+```typescript
+import { squareSet } from 'chessops/debug';
+import { queenAttacks } from 'chessops/attacks';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+pos.board.set(27, { role: 'queen', color: 'white' }); // Place queen on e4
+
+const attacks = queenAttacks(27, pos.board.occupied);
+console.log('Queen on e4 attacks:');
+console.log(squareSet(attacks));
+```
+
+### Testing Move Generation
+
+```typescript
+import { perft } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Test a specific position
+const fen = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1';
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+const nodes = perft(pos, 3);
+console.log(`Perft(3) = ${nodes}`); // Should be 97862
+
+// Log individual moves
+perft(pos, 1, true);
+```
+
+### Debugging Move Legality
+
+```typescript
+import { dests } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+const move = parseSan(pos, 'e4')!;
+pos.play(move);
+
+const ctx = pos.ctx();
+const allDests = pos.allDests(ctx);
+
+console.log('All legal moves for black:');
+console.log(dests(allDests));
+```
+
+### Performance Benchmarking
+
+```typescript
+import { perft } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+console.log('Benchmarking move generation:');
+for (let depth = 1; depth <= 5; depth++) {
+  const start = performance.now();
+  const nodes = perft(pos, depth);
+  const elapsed = performance.now() - start;
+  
+  console.log(`Depth ${depth}: ${nodes} nodes in ${elapsed.toFixed(2)}ms`);
+  console.log(`  Speed: ${(nodes / elapsed * 1000).toFixed(0)} nodes/sec`);
+}
+```
+
+### Comparing Positions
+
+```typescript
+import { board } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+import { parseFen, makeFen } from 'chessops/fen';
+
+const fen1 = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const fen2 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+
+const pos1 = Chess.fromSetup(parseFen(fen1).unwrap()).unwrap();
+const pos2 = Chess.fromSetup(parseFen(fen2).unwrap()).unwrap();
+
+console.log('Position 1:');
+console.log(board(pos1.board));
+console.log('\nPosition 2:');
+console.log(board(pos2.board));
+```
+
+### Validating Perft Results
+
+```typescript
+import { perft } from 'chessops/debug';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Known perft positions for testing
+const tests = [
+  { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', depth: 5, expected: 4865609 },
+  { fen: 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1', depth: 3, expected: 97862 },
+  { fen: '8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1', depth: 5, expected: 674624 },
+];
+
+for (const test of tests) {
+  const setup = parseFen(test.fen).unwrap();
+  const pos = Chess.fromSetup(setup).unwrap();
+  const result = perft(pos, test.depth);
+  
+  const status = result === test.expected ? '✓' : '✗';
+  console.log(`${status} Perft(${test.depth}): ${result} (expected ${test.expected})`);
+}
+```

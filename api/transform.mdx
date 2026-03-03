@@ -1,0 +1,407 @@
+---
+title: Transform
+description: Transform board positions with flips, rotations, and shifts
+---
+
+The transform module provides functions for geometrically transforming board positions, including flips, rotations, and shifts. These are useful for position analysis, endgame tablebases, and symmetry detection.
+
+## Flip Functions
+
+### flipVertical
+
+Flips a SquareSet vertically (mirrors across the horizontal center).
+
+```typescript
+import { flipVertical } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0, 1, 2]); // a1, b1, c1
+const flipped = flipVertical(squares);
+console.log(flipped.has(56)); // true (a8)
+console.log(flipped.has(57)); // true (b8)
+console.log(flipped.has(58)); // true (c8)
+```
+
+<ParamField path="s" type="SquareSet" required>
+  The SquareSet to flip vertically
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with rank 1 mapped to rank 8, rank 2 to rank 7, etc.
+</ResponseField>
+
+---
+
+### flipHorizontal
+
+Flips a SquareSet horizontally (mirrors across the vertical center).
+
+```typescript
+import { flipHorizontal } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0, 8, 16]); // a1, a2, a3
+const flipped = flipHorizontal(squares);
+console.log(flipped.has(7)); // true (h1)
+console.log(flipped.has(15)); // true (h2)
+console.log(flipped.has(23)); // true (h3)
+```
+
+<ParamField path="s" type="SquareSet" required>
+  The SquareSet to flip horizontally
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with a-file mapped to h-file, b-file to g-file, etc.
+</ResponseField>
+
+---
+
+### flipDiagonal
+
+Flips a SquareSet across the a1-h8 diagonal.
+
+```typescript
+import { flipDiagonal } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([1]); // b1
+const flipped = flipDiagonal(squares);
+console.log(flipped.has(8)); // true (a2)
+```
+
+<ParamField path="s" type="SquareSet" required>
+  The SquareSet to flip diagonally
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with squares transposed across the a1-h8 diagonal (files become ranks and vice versa)
+</ResponseField>
+
+## Rotation Functions
+
+### rotate180
+
+Rotates a SquareSet 180 degrees.
+
+```typescript
+import { rotate180 } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0]); // a1
+const rotated = rotate180(squares);
+console.log(rotated.has(63)); // true (h8)
+```
+
+<ParamField path="s" type="SquareSet" required>
+  The SquareSet to rotate
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet rotated 180 degrees (equivalent to flipVertical + flipHorizontal)
+</ResponseField>
+
+## Shift Functions
+
+### shiftLeft
+
+Shifts all squares one file to the left (wrapping a-file to h-file).
+
+```typescript
+import { shiftLeft } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([1]); // b1
+const shifted = shiftLeft(squares);
+console.log(shifted.has(0)); // true (a1)
+
+const aFile = SquareSet.fromSquares([0]); // a1
+const wrapped = shiftLeft(aFile);
+console.log(wrapped.has(7)); // true (h1, wrapped)
+```
+
+<ParamField path="squares" type="SquareSet" required>
+  The SquareSet to shift
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with all squares shifted one file left (with wrapping)
+</ResponseField>
+
+---
+
+### shiftRight
+
+Shifts all squares one file to the right (wrapping h-file to a-file).
+
+```typescript
+import { shiftRight } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0]); // a1
+const shifted = shiftRight(squares);
+console.log(shifted.has(1)); // true (b1)
+
+const hFile = SquareSet.fromSquares([7]); // h1
+const wrapped = shiftRight(hFile);
+console.log(wrapped.has(0)); // true (a1, wrapped)
+```
+
+<ParamField path="squares" type="SquareSet" required>
+  The SquareSet to shift
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with all squares shifted one file right (with wrapping)
+</ResponseField>
+
+---
+
+### shiftUp
+
+Shifts all squares one rank up (wrapping rank 8 to rank 1).
+
+```typescript
+import { shiftUp } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([0]); // a1
+const shifted = shiftUp(squares);
+console.log(shifted.has(8)); // true (a2)
+
+const rank8 = SquareSet.fromSquares([56]); // a8
+const wrapped = shiftUp(rank8);
+console.log(wrapped.has(0)); // true (a1, wrapped)
+```
+
+<ParamField path="squares" type="SquareSet" required>
+  The SquareSet to shift
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with all squares shifted one rank up (with wrapping)
+</ResponseField>
+
+---
+
+### shiftDown
+
+Shifts all squares one rank down (wrapping rank 1 to rank 8).
+
+```typescript
+import { shiftDown } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+
+const squares = SquareSet.fromSquares([8]); // a2
+const shifted = shiftDown(squares);
+console.log(shifted.has(0)); // true (a1)
+
+const rank1 = SquareSet.fromSquares([0]); // a1
+const wrapped = shiftDown(rank1);
+console.log(wrapped.has(56)); // true (a8, wrapped)
+```
+
+<ParamField path="squares" type="SquareSet" required>
+  The SquareSet to shift
+</ParamField>
+
+<ResponseField name="return" type="SquareSet">
+  A new SquareSet with all squares shifted one rank down (with wrapping)
+</ResponseField>
+
+## Board Transformation Functions
+
+### transformBoard
+
+Applies a transformation function to all piece sets in a board.
+
+```typescript
+import { transformBoard, flipVertical } from 'chessops/transform';
+import { Board } from 'chessops/board';
+
+const board = Board.default();
+const flipped = transformBoard(board, flipVertical);
+
+// White pieces are now on rank 8, black pieces on rank 1
+console.log(flipped.get(56)); // { role: 'rook', color: 'white' } (was on a1)
+```
+
+<ParamField path="board" type="Board" required>
+  The board to transform
+</ParamField>
+
+<ParamField path="f" type="(s: SquareSet) => SquareSet" required>
+  Transformation function to apply to each piece set
+</ParamField>
+
+<ResponseField name="return" type="Board">
+  A new Board with the transformation applied to all piece positions
+</ResponseField>
+
+<Note>
+This function transforms the geometric positions but does not change piece colors or update move-related state (castling rights, en passant, etc.).
+</Note>
+
+---
+
+### transformSetup
+
+Applies a transformation function to a complete position setup.
+
+```typescript
+import { transformSetup, flipVertical } from 'chessops/transform';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const flipped = transformSetup(setup, flipVertical);
+
+// Board is flipped, castling rights and ep square are also transformed
+console.log(flipped.board.get(56)); // { role: 'rook', color: 'white' }
+```
+
+<ParamField path="setup" type="Setup" required>
+  The position setup to transform
+</ParamField>
+
+<ParamField path="f" type="(s: SquareSet) => SquareSet" required>
+  Transformation function to apply
+</ParamField>
+
+<ResponseField name="return" type="Setup">
+  A new Setup with transformed board, castling rights, and en passant square. Turn, pockets, and move counters are preserved.
+</ResponseField>
+
+## Usage Examples
+
+### Normalizing Positions for Analysis
+
+```typescript
+import { transformSetup, flipVertical } from 'chessops/transform';
+import { parseFen, makeFen } from 'chessops/fen';
+
+// Normalize position so white is always on bottom
+function normalizePosition(fen: string): string {
+  const setup = parseFen(fen).unwrap();
+  
+  if (setup.turn === 'black') {
+    // Flip the board if it's black to move
+    const flipped = transformSetup(setup, flipVertical);
+    flipped.turn = 'white'; // Swap turn
+    return makeFen(flipped);
+  }
+  
+  return fen;
+}
+```
+
+### Detecting Symmetries
+
+```typescript
+import { transformBoard, flipVertical, flipHorizontal } from 'chessops/transform';
+import { Board } from 'chessops/board';
+
+function isSymmetric(board: Board): {
+  vertical: boolean;
+  horizontal: boolean;
+} {
+  const vFlipped = transformBoard(board, flipVertical);
+  const hFlipped = transformBoard(board, flipHorizontal);
+  
+  return {
+    vertical: board.equals(vFlipped),
+    horizontal: board.equals(hFlipped),
+  };
+}
+
+const board = Board.default();
+const symmetry = isSymmetric(board);
+console.log(symmetry.vertical); // false
+console.log(symmetry.horizontal); // true (starting position is horizontally symmetric)
+```
+
+### Converting Between Perspectives
+
+```typescript
+import { transformSetup, rotate180 } from 'chessops/transform';
+import { parseFen, makeFen } from 'chessops/fen';
+
+// Show position from opponent's perspective
+function opponentView(fen: string): string {
+  const setup = parseFen(fen).unwrap();
+  const rotated = transformSetup(setup, rotate180);
+  return makeFen(rotated);
+}
+
+const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+const flipped = opponentView(fen);
+console.log(flipped);
+// Board is now shown from black's perspective
+```
+
+### Endgame Tablebase Normalization
+
+```typescript
+import { transformSetup, flipVertical, flipHorizontal } from 'chessops/transform';
+import { parseFen, makeFen } from 'chessops/fen';
+
+// Normalize KPvK endgame (king and pawn vs king)
+function normalizeKPK(fen: string): string {
+  let setup = parseFen(fen).unwrap();
+  
+  // Ensure white king is on queenside
+  const whiteKing = setup.board.kingOf('white');
+  if (whiteKing !== undefined && whiteKing % 8 >= 4) {
+    setup = transformSetup(setup, flipHorizontal);
+  }
+  
+  // Ensure it's white to move
+  if (setup.turn === 'black') {
+    setup = transformSetup(setup, flipVertical);
+    setup.turn = 'white';
+  }
+  
+  return makeFen(setup);
+}
+```
+
+### Analyzing Pawn Structures
+
+```typescript
+import { transformBoard, flipVertical } from 'chessops/transform';
+import { SquareSet } from 'chessops';
+import { Board } from 'chessops/board';
+
+// Get pawn structure (independent of color)
+function getPawnStructure(board: Board): {
+  white: SquareSet;
+  black: SquareSet;
+} {
+  const whitePawns = board.pieces('white', 'pawn');
+  const blackPawns = board.pieces('black', 'pawn');
+  
+  // Normalize black pawns as if they were white
+  const normalizedBlack = flipVertical(blackPawns);
+  
+  return {
+    white: whitePawns,
+    black: normalizedBlack,
+  };
+}
+```
+
+### Creating Position Variants
+
+```typescript
+import { transformBoard, rotate180, flipHorizontal } from 'chessops/transform';
+import { Board } from 'chessops/board';
+
+// Generate all symmetric variants of a position
+function getSymmetricVariants(board: Board): Board[] {
+  return [
+    board,
+    transformBoard(board, flipHorizontal),
+    transformBoard(board, rotate180),
+    transformBoard(board, s => rotate180(flipHorizontal(s))),
+  ];
+}
+```

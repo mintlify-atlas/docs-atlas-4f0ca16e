@@ -1,0 +1,369 @@
+---
+title: 'Board Transformations'
+description: 'Flip, rotate, and transform chess positions'
+icon: 'rotate'
+---
+
+## Overview
+
+The `transform` module provides functions for transforming chess positions through mirroring, rotating, and shifting operations. These transformations work on both `SquareSet` bitboards and complete `Board` or `Setup` positions.
+
+## SquareSet Transformations
+
+All transformation functions work on `SquareSet` bitboards and return a new transformed `SquareSet`.
+
+### Flip Vertical
+
+```typescript
+flipVertical(s: SquareSet): SquareSet
+```
+
+Flips the board vertically (mirrors across the horizontal center). Rank 1 becomes rank 8, rank 2 becomes rank 7, etc.
+
+```typescript
+import { flipVertical } from 'chessops/transform';
+import { SquareSet } from 'chessops/squareSet';
+
+const whiteBackrank = SquareSet.backrank('white');
+const flipped = flipVertical(whiteBackrank);
+// Now represents rank 8 (black's backrank)
+```
+
+**Implementation**: Uses the `bswap64()` bitboard operation (byte swap).
+
+```typescript
+export const flipVertical = (s: SquareSet): SquareSet => s.bswap64();
+```
+
+### Flip Horizontal
+
+```typescript
+flipHorizontal(s: SquareSet): SquareSet
+```
+
+Flips the board horizontally (mirrors across the vertical center). A-file becomes h-file, b-file becomes g-file, etc.
+
+```typescript
+import { flipHorizontal } from 'chessops/transform';
+
+const aFile = SquareSet.fromFile(0);
+const flipped = flipHorizontal(aFile);
+// Now represents h-file
+```
+
+**Implementation**: Uses bitwise operations to swap bits within each rank:
+
+```typescript
+export const flipHorizontal = (s: SquareSet): SquareSet => {
+  const k1 = new SquareSet(0x55555555, 0x55555555);
+  const k2 = new SquareSet(0x33333333, 0x33333333);
+  const k4 = new SquareSet(0x0f0f0f0f, 0x0f0f0f0f);
+  s = s.shr64(1).intersect(k1).union(s.intersect(k1).shl64(1));
+  s = s.shr64(2).intersect(k2).union(s.intersect(k2).shl64(2));
+  s = s.shr64(4).intersect(k4).union(s.intersect(k4).shl64(4));
+  return s;
+};
+```
+
+This performs a series of bit swaps: first swapping adjacent bits, then pairs of bits, then nibbles.
+
+### Flip Diagonal
+
+```typescript
+flipDiagonal(s: SquareSet): SquareSet
+```
+
+Flips the board along the a1-h8 diagonal. This transposes the board: files become ranks and ranks become files.
+
+```typescript
+import { flipDiagonal } from 'chessops/transform';
+
+const rank1 = SquareSet.fromRank(0);
+const flipped = flipDiagonal(rank1);
+// Now represents a-file
+```
+
+**Implementation**: Uses delta-swap algorithm for diagonal transposition:
+
+```typescript
+export const flipDiagonal = (s: SquareSet): SquareSet => {
+  let t = s.xor(s.shl64(28)).intersect(new SquareSet(0, 0x0f0f0f0f));
+  s = s.xor(t.xor(t.shr64(28)));
+  t = s.xor(s.shl64(14)).intersect(new SquareSet(0x33330000, 0x33330000));
+  s = s.xor(t.xor(t.shr64(14)));
+  t = s.xor(s.shl64(7)).intersect(new SquareSet(0x55005500, 0x55005500));
+  s = s.xor(t.xor(t.shr64(7)));
+  return s;
+};
+```
+
+### Rotate 180°
+
+```typescript
+rotate180(s: SquareSet): SquareSet
+```
+
+Rotates the board 180 degrees. Equivalent to flipping both vertically and horizontally.
+
+```typescript
+import { rotate180 } from 'chessops/transform';
+
+const bottomLeft = SquareSet.fromSquare(0); // a1
+const rotated = rotate180(bottomLeft);
+// Now represents h8 (square 63)
+```
+
+**Implementation**: Uses reverse bit order operation:
+
+```typescript
+export const rotate180 = (s: SquareSet): SquareSet => s.rbit64();
+```
+
+<Tip>
+`rotate180()` is particularly useful for converting between perspectives in chess GUIs or for symmetry analysis.
+</Tip>
+
+## Directional Shifts
+
+Shift operations move pieces in a specific direction, wrapping around board edges.
+
+### Shift Left
+
+```typescript
+shiftLeft(squares: SquareSet): SquareSet
+```
+
+Shifts all squares one file to the left. Squares on the a-file wrap to the h-file.
+
+```typescript
+import { shiftLeft } from 'chessops/transform';
+
+const e4 = SquareSet.fromSquare(makeSquare('e4'));
+const shifted = shiftLeft(e4);
+// Now represents d4
+```
+
+**Implementation**:
+
+```typescript
+export const shiftLeft = (squares: SquareSet): SquareSet =>
+  squares
+    .diff(SquareSet.fromFile(0))      // Remove a-file
+    .shr64(1)                          // Shift right by 1
+    .union(squares.intersect(SquareSet.fromFile(0)).shl64(7)); // Wrap a-file to h-file
+```
+
+### Shift Right
+
+```typescript
+shiftRight(squares: SquareSet): SquareSet
+```
+
+Shifts all squares one file to the right. Squares on the h-file wrap to the a-file.
+
+```typescript
+import { shiftRight } from 'chessops/transform';
+
+const d4 = SquareSet.fromSquare(makeSquare('d4'));
+const shifted = shiftRight(d4);
+// Now represents e4
+```
+
+### Shift Up
+
+```typescript
+shiftUp(squares: SquareSet): SquareSet
+```
+
+Shifts all squares one rank up. Squares on rank 8 wrap to rank 1.
+
+```typescript
+import { shiftUp } from 'chessops/transform';
+
+const e4 = SquareSet.fromSquare(makeSquare('e4'));
+const shifted = shiftUp(e4);
+// Now represents e5
+```
+
+### Shift Down
+
+```typescript
+shiftDown(squares: SquareSet): SquareSet
+```
+
+Shifts all squares one rank down. Squares on rank 1 wrap to rank 8.
+
+```typescript
+import { shiftDown } from 'chessops/transform';
+
+const e5 = SquareSet.fromSquare(makeSquare('e5'));
+const shifted = shiftDown(e5);
+// Now represents e4
+```
+
+<Note>
+Shift functions wrap around the board edges. This behavior is useful for certain chess variants or pattern analysis, but may not be suitable for standard move generation.
+</Note>
+
+## Board Transformations
+
+Transform complete board positions while preserving piece types and colors.
+
+### Transform Board
+
+```typescript
+transformBoard(
+  board: Board,
+  f: (s: SquareSet) => SquareSet
+): Board
+```
+
+Applies a SquareSet transformation function to all pieces on the board.
+
+```typescript
+import { transformBoard, flipVertical } from 'chessops/transform';
+import { Board } from 'chessops/board';
+
+const board = Board.default();
+const flipped = transformBoard(board, flipVertical);
+// Board is now mirrored vertically
+```
+
+**Implementation**:
+
+```typescript
+export const transformBoard = (
+  board: Board,
+  f: (s: SquareSet) => SquareSet,
+): Board => {
+  const b = Board.empty();
+  b.occupied = f(board.occupied);
+  b.promoted = f(board.promoted);
+  for (const color of COLORS) b[color] = f(board[color]);
+  for (const role of ROLES) b[role] = f(board[role]);
+  return b;
+};
+```
+
+This transforms:
+- All occupied squares
+- Promoted piece positions
+- Piece positions by color (white/black)
+- Piece positions by role (pawn/knight/bishop/rook/queen/king)
+
+### Transform Setup
+
+```typescript
+transformSetup(
+  setup: Setup,
+  f: (s: SquareSet) => SquareSet
+): Setup
+```
+
+Transforms a complete position setup, including castling rights and en passant squares.
+
+```typescript
+import { transformSetup, flipVertical } from 'chessops/transform';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const flipped = transformSetup(setup, flipVertical);
+// Entire position is flipped, preserving game state
+```
+
+**Key features**:
+- Transforms the board using `transformBoard()`
+- Preserves pockets (for Crazyhouse variant)
+- Keeps turn, halfmove, and fullmove counters unchanged
+- Transforms castling rights appropriately
+- Transforms en passant square if present
+- Preserves remaining checks (for Three-Check variant)
+
+## Use Cases
+
+### View from Black's Perspective
+
+```typescript
+import { transformSetup, rotate180 } from 'chessops/transform';
+
+function viewFromBlack(setup: Setup): Setup {
+  return transformSetup(setup, rotate180);
+}
+```
+
+### Symmetry Analysis
+
+```typescript
+import { flipHorizontal, flipVertical } from 'chessops/transform';
+
+function isSymmetric(board: Board): boolean {
+  const horizontalFlip = transformBoard(board, flipHorizontal);
+  const verticalFlip = transformBoard(board, flipVertical);
+  
+  return board.occupied.equals(horizontalFlip.occupied) ||
+         board.occupied.equals(verticalFlip.occupied);
+}
+```
+
+### Pattern Matching
+
+Find patterns regardless of board orientation:
+
+```typescript
+import { transformBoard, flipVertical, flipHorizontal, rotate180 } from 'chessops/transform';
+
+function findPattern(board: Board, pattern: Board): boolean {
+  const transformations = [
+    (b: Board) => b,
+    (b: Board) => transformBoard(b, flipVertical),
+    (b: Board) => transformBoard(b, flipHorizontal),
+    (b: Board) => transformBoard(b, rotate180),
+  ];
+  
+  for (const transform of transformations) {
+    const transformed = transform(board);
+    if (matchesPattern(transformed, pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+### Chess960 Analysis
+
+Normalize Chess960 positions for comparison:
+
+```typescript
+import { transformSetup, flipHorizontal } from 'chessops/transform';
+
+function normalizeChess960(setup: Setup): Setup {
+  // If king is on queenside, flip to kingside
+  const kingSquare = setup.board.kingOf('white');
+  if (kingSquare && squareFile(kingSquare) < 4) {
+    return transformSetup(setup, flipHorizontal);
+  }
+  return setup;
+}
+```
+
+<Tip>
+Combine multiple transformations to create complex board manipulations. For example, `flipVertical(flipHorizontal(s))` is equivalent to `rotate180(s)`.
+</Tip>
+
+## Performance Notes
+
+- All transformations are pure functions (no mutations)
+- SquareSet operations are constant-time bitwise operations
+- Board transformations iterate over all piece types and colors
+- Transformations create new objects rather than modifying existing ones
+
+<Tip>
+For repeated transformations, consider caching results. SquareSets are immutable, making them safe to cache.
+</Tip>
+
+## Related
+
+- [SquareSet](/api/square-set) - Bitboard operations
+- [Board](/api/board) - Board representation
+- [Setup](/api/setup) - Position setup

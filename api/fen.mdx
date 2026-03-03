@@ -1,0 +1,445 @@
+---
+title: FEN
+description: Parse and generate Forsyth-Edwards Notation (FEN) strings
+---
+
+The FEN module provides functions for parsing and generating FEN strings, which are used to describe chess positions.
+
+## Constants
+
+### Position Constants
+
+```typescript
+import { 
+  INITIAL_BOARD_FEN, 
+  INITIAL_EPD, 
+  INITIAL_FEN,
+  EMPTY_BOARD_FEN,
+  EMPTY_EPD,
+  EMPTY_FEN 
+} from 'chessops/fen';
+
+console.log(INITIAL_FEN);
+// 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+```
+
+<ResponseField name="INITIAL_BOARD_FEN" type="string">
+  Board part of starting position: `'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'`
+</ResponseField>
+
+<ResponseField name="INITIAL_EPD" type="string">
+  Starting position EPD (without move counters): `INITIAL_BOARD_FEN + ' w KQkq -'`
+</ResponseField>
+
+<ResponseField name="INITIAL_FEN" type="string">
+  Complete starting position FEN: `INITIAL_EPD + ' 0 1'`
+</ResponseField>
+
+<ResponseField name="EMPTY_BOARD_FEN" type="string">
+  Empty board: `'8/8/8/8/8/8/8/8'`
+</ResponseField>
+
+<ResponseField name="EMPTY_EPD" type="string">
+  Empty position EPD: `EMPTY_BOARD_FEN + ' w - -'`
+</ResponseField>
+
+<ResponseField name="EMPTY_FEN" type="string">
+  Complete empty position FEN: `EMPTY_EPD + ' 0 1'`
+</ResponseField>
+
+## Error Handling
+
+### InvalidFen
+
+Enum of possible FEN parsing errors.
+
+```typescript
+import { InvalidFen } from 'chessops/fen';
+
+enum InvalidFen {
+  Fen = 'ERR_FEN',
+  Board = 'ERR_BOARD',
+  Pockets = 'ERR_POCKETS',
+  Turn = 'ERR_TURN',
+  Castling = 'ERR_CASTLING',
+  EpSquare = 'ERR_EP_SQUARE',
+  RemainingChecks = 'ERR_REMAINING_CHECKS',
+  Halfmoves = 'ERR_HALFMOVES',
+  Fullmoves = 'ERR_FULLMOVES',
+}
+```
+
+### FenError
+
+Error class for FEN parsing failures.
+
+```typescript
+import { FenError, parseFen } from 'chessops/fen';
+
+const result = parseFen('invalid');
+if (result.isErr) {
+  const error: FenError = result.error;
+  console.log(error.message); // One of the InvalidFen values
+}
+```
+
+## Parsing Functions
+
+### parseFen
+
+Parses a complete FEN string into a Setup.
+
+```typescript
+import { parseFen } from 'chessops/fen';
+
+const result = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+
+if (result.isOk) {
+  const setup = result.value;
+  console.log(setup.turn); // 'white'
+  console.log(setup.fullmoves); // 1
+} else {
+  console.error('Invalid FEN:', result.error.message);
+}
+```
+
+<ParamField path="fen" type="string" required>
+  The FEN string to parse. Supports:
+  - Standard FEN
+  - FEN with pockets (Crazyhouse): `[Qq]` or `/Qq` notation
+  - FEN with remaining checks (Three-check): `+1+2` notation
+  - Promoted pieces marked with `~`
+</ParamField>
+
+<ResponseField name="return" type="Result<Setup, FenError>">
+  A Result containing either the parsed Setup or a FenError
+</ResponseField>
+
+---
+
+### parseBoardFen
+
+Parses only the board part of a FEN string.
+
+```typescript
+import { parseBoardFen } from 'chessops/fen';
+
+const result = parseBoardFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+
+if (result.isOk) {
+  const board = result.value;
+  console.log(board.occupied.size()); // 32
+}
+```
+
+<ParamField path="boardPart" type="string" required>
+  The board part of a FEN string (before the first space)
+</ParamField>
+
+<ResponseField name="return" type="Result<Board, FenError>">
+  A Result containing either the parsed Board or a FenError
+</ResponseField>
+
+---
+
+### parsePockets
+
+Parses pocket notation for Crazyhouse.
+
+```typescript
+import { parsePockets } from 'chessops/fen';
+
+const result = parsePockets('Qq'); // White queen, black queen
+
+if (result.isOk) {
+  const pockets = result.value;
+  console.log(pockets.white.queen); // 1
+  console.log(pockets.black.queen); // 1
+}
+```
+
+<ParamField path="pocketPart" type="string" required>
+  String of piece letters (uppercase for white, lowercase for black)
+</ParamField>
+
+<ResponseField name="return" type="Result<Material, FenError>">
+  A Result containing either the parsed Material (pockets) or a FenError
+</ResponseField>
+
+---
+
+### parseCastlingFen
+
+Parses castling rights from FEN notation.
+
+```typescript
+import { parseCastlingFen, parseBoardFen } from 'chessops/fen';
+
+const board = parseBoardFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR').unwrap();
+const result = parseCastlingFen(board, 'KQkq');
+
+if (result.isOk) {
+  const castlingRights = result.value;
+  console.log(castlingRights.has(0)); // true (a1 rook for white queenside)
+  console.log(castlingRights.has(7)); // true (h1 rook for white kingside)
+}
+```
+
+<ParamField path="board" type="Board" required>
+  The board to use for determining rook positions
+</ParamField>
+
+<ParamField path="castlingPart" type="string" required>
+  Castling rights string: 'KQkq', 'Kk', 'AHah' (Chess960), or '-'
+</ParamField>
+
+<ResponseField name="return" type="Result<SquareSet, FenError>">
+  A Result containing either a SquareSet of rook squares with castling rights or a FenError
+</ResponseField>
+
+---
+
+### parseRemainingChecks
+
+Parses remaining checks notation for Three-check variant.
+
+```typescript
+import { parseRemainingChecks } from 'chessops/fen';
+
+const result = parseRemainingChecks('2+1');
+
+if (result.isOk) {
+  const checks = result.value;
+  console.log(checks.white); // 2
+  console.log(checks.black); // 1
+}
+```
+
+<ParamField path="part" type="string" required>
+  Remaining checks string: '3+3', '2+1', '+1+2', etc.
+</ParamField>
+
+<ResponseField name="return" type="Result<RemainingChecks, FenError>">
+  A Result containing either the parsed RemainingChecks or a FenError
+</ResponseField>
+
+---
+
+### parsePiece
+
+Parses a single piece from a string.
+
+```typescript
+import { parsePiece } from 'chessops/fen';
+
+const piece = parsePiece('K');
+console.log(piece); // { role: 'king', color: 'white' }
+
+const promoted = parsePiece('q~');
+console.log(promoted); // { role: 'queen', color: 'black', promoted: true }
+```
+
+<ParamField path="str" type="string" required>
+  A piece character (K, Q, R, B, N, P for white; k, q, r, b, n, p for black), optionally followed by '~' for promoted
+</ParamField>
+
+<ResponseField name="return" type="Piece | undefined">
+  The parsed Piece, or undefined if invalid
+</ResponseField>
+
+## Generation Functions
+
+### makeFen
+
+Generates a FEN string from a Setup.
+
+```typescript
+import { makeFen } from 'chessops/fen';
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+pos.play({ from: 12, to: 28 }); // e2-e4
+
+const fen = makeFen(pos.toSetup());
+console.log(fen);
+// 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'
+```
+
+<ParamField path="setup" type="Setup" required>
+  The position setup to convert to FEN
+</ParamField>
+
+<ParamField path="opts" type="FenOpts">
+  Options:
+  - `epd?: boolean` - If true, omits halfmove and fullmove counters (generates EPD instead of FEN)
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The FEN string representation of the position
+</ResponseField>
+
+---
+
+### makeBoardFen
+
+Generates only the board part of a FEN string.
+
+```typescript
+import { makeBoardFen } from 'chessops/fen';
+import { Board } from 'chessops/board';
+
+const board = Board.default();
+const boardFen = makeBoardFen(board);
+console.log(boardFen);
+// 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'
+```
+
+<ParamField path="board" type="Board" required>
+  The board to convert to FEN notation
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The board part of a FEN string
+</ResponseField>
+
+---
+
+### makePiece
+
+Generates the FEN notation for a single piece.
+
+```typescript
+import { makePiece } from 'chessops/fen';
+
+const piece = { role: 'queen', color: 'white' };
+console.log(makePiece(piece)); // 'Q'
+
+const promoted = { role: 'queen', color: 'black', promoted: true };
+console.log(makePiece(promoted)); // 'q~'
+```
+
+<ParamField path="piece" type="Piece" required>
+  The piece to convert
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The FEN notation for the piece
+</ResponseField>
+
+---
+
+### makePockets
+
+Generates pocket notation for Crazyhouse.
+
+```typescript
+import { makePockets } from 'chessops/fen';
+import { Material } from 'chessops/setup';
+
+const pockets = Material.empty();
+pockets.white.queen = 1;
+pockets.black.pawn = 2;
+
+console.log(makePockets(pockets)); // 'Qpp'
+```
+
+<ParamField path="pocket" type="Material" required>
+  The material in pockets for both sides
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The pocket notation string
+</ResponseField>
+
+---
+
+### makeCastlingFen
+
+Generates castling rights notation.
+
+```typescript
+import { makeCastlingFen } from 'chessops/fen';
+import { Board } from 'chessops/board';
+import { SquareSet } from 'chessops';
+
+const board = Board.default();
+const castlingRights = SquareSet.fromSquares([0, 7, 56, 63]);
+
+console.log(makeCastlingFen(board, castlingRights)); // 'KQkq'
+```
+
+<ParamField path="board" type="Board" required>
+  The board (used to determine standard vs Chess960 notation)
+</ParamField>
+
+<ParamField path="castlingRights" type="SquareSet" required>
+  Set of squares containing rooks with castling rights
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The castling rights notation
+</ResponseField>
+
+---
+
+### makeRemainingChecks
+
+Generates remaining checks notation for Three-check.
+
+```typescript
+import { makeRemainingChecks, RemainingChecks } from 'chessops/fen';
+
+const checks = new RemainingChecks(2, 1);
+console.log(makeRemainingChecks(checks)); // '2+1'
+```
+
+<ParamField path="checks" type="RemainingChecks" required>
+  The remaining checks for both sides
+</ParamField>
+
+<ResponseField name="return" type="string">
+  The remaining checks notation
+</ResponseField>
+
+## Usage Examples
+
+### Round-Trip Conversion
+
+```typescript
+import { parseFen, makeFen } from 'chessops/fen';
+
+const originalFen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+const setup = parseFen(originalFen).unwrap();
+const regeneratedFen = makeFen(setup);
+
+console.log(originalFen === regeneratedFen); // true
+```
+
+### Handling Variants
+
+```typescript
+import { parseFen, makeFen } from 'chessops/fen';
+
+// Crazyhouse with pockets
+const zhFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[Qq] w KQkq - 0 1';
+const zhSetup = parseFen(zhFen).unwrap();
+console.log(zhSetup.pockets?.white.queen); // 1
+
+// Three-check with remaining checks
+const tcFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3+3 0 1';
+const tcSetup = parseFen(tcFen).unwrap();
+console.log(tcSetup.remainingChecks?.white); // 3
+```
+
+### Custom Position Setup
+
+```typescript
+import { parseFen, makeFen } from 'chessops/fen';
+import { setupPosition } from 'chessops/variant';
+
+const fen = '8/8/8/4k3/8/8/4K3/8 w - - 0 1';
+const setup = parseFen(fen).unwrap();
+const pos = setupPosition('chess', setup).unwrap();
+
+console.log(pos.isEnd()); // true (insufficient material)
+```

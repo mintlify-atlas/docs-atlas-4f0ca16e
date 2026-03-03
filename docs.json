@@ -1,122 +1,133 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "chessops",
+  "theme": "sequoia",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#769656",
+    "light": "#EEEED2",
+    "dark": "#312E2B"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/niklasf/chessops"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/niklasf/chessops"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "core/types",
+              "core/squares-and-bitboards",
+              "core/board-and-positions",
+              "core/moves",
+              "core/game-rules"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Working with Notation",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "notation/fen",
+              "notation/san",
+              "notation/pgn",
+              "notation/uci"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Chess Variants",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "variants/overview",
+              "variants/crazyhouse",
+              "variants/atomic",
+              "variants/other-variants"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/attacks-and-rays",
+              "advanced/transformations",
+              "advanced/compatibility",
+              "advanced/performance"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-usage",
+              "examples/move-generation",
+              "examples/pgn-parsing",
+              "examples/position-analysis"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Types",
             "pages": [
-              "api-reference/introduction"
+              "api/types",
+              "api/util"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Board Representation",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/square-set",
+              "api/board",
+              "api/setup"
+            ]
+          },
+          {
+            "group": "Position & Rules",
+            "pages": [
+              "api/chess",
+              "api/variant"
+            ]
+          },
+          {
+            "group": "Attacks & Movement",
+            "pages": [
+              "api/attacks"
+            ]
+          },
+          {
+            "group": "Notation",
+            "pages": [
+              "api/fen",
+              "api/san",
+              "api/pgn"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/transform",
+              "api/compat",
+              "api/debug"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

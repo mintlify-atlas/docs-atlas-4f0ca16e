@@ -1,0 +1,598 @@
+---
+title: Other Variants
+description: Antichess, King of the Hill, Three-check, Horde, and Racing Kings
+icon: chess
+---
+
+Chessops supports several additional chess variants, each with unique win conditions and rules.
+
+## Antichess
+
+In Antichess, the goal is reversed: lose all your pieces or get stalemated to win.
+
+### Rules
+
+- Win by losing all your pieces or getting stalemated
+- Captures are mandatory (forced)
+- No check or checkmate
+- No castling
+- Kings have no special protection
+
+### Usage
+
+```typescript
+import { Antichess } from 'chessops/variant';
+
+// Create position
+const pos = Antichess.default();
+
+// Check the context to see if captures are forced
+const ctx = pos.ctx();
+if (ctx.mustCapture) {
+  console.log('Must capture!');
+}
+
+// Get legal moves (only captures if mustCapture is true)
+const dests = pos.dests(square, ctx);
+
+// Check win condition
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  // Current player wins if they have no pieces left
+  console.log('Winner:', outcome?.winner);
+}
+```
+
+### Forced Captures
+
+From variant.ts:282-299, captures are detected and forced:
+
+```typescript
+ctx(): Context {
+  const ctx = super.ctx();
+  // Check for en passant captures
+  if (
+    defined(this.epSquare)
+    && pawnAttacks(opposite(this.turn), this.epSquare)
+        .intersects(this.board.pieces(this.turn, 'pawn'))
+  ) {
+    ctx.mustCapture = true;
+    return ctx;
+  }
+  // Check for any captures
+  const enemy = this.board[opposite(this.turn)];
+  for (const from of this.board[this.turn]) {
+    if (pseudoDests(this, from, ctx).intersects(enemy)) {
+      ctx.mustCapture = true;
+      return ctx;
+    }
+  }
+  return ctx;
+}
+```
+
+### Legal Moves
+
+Moves are filtered to only captures when required:
+
+```typescript
+import { Antichess } from 'chessops/variant';
+
+const pos = Antichess.default();
+const ctx = pos.ctx();
+
+// If mustCapture is true, only capture moves are legal
+const dests = pos.dests(square, ctx);
+// Returns: captures only if ctx.mustCapture, otherwise all moves
+```
+
+### Win Conditions
+
+```typescript
+// Game ends when current player has no pieces
+if (pos.isVariantEnd()) {
+  // From variant.ts:334-336
+  // isVariantEnd(): boolean {
+  //   return this.board[this.turn].isEmpty();
+  // }
+}
+
+// Stalemate also wins for the stalemated player
+const outcome = pos.variantOutcome(ctx);
+if (ctx.variantEnd || pos.isStalemate(ctx)) {
+  // Current player wins
+  return { winner: this.turn };
+}
+```
+
+<Note>
+In Antichess, there is no concept of check. The `kingAttackers()` method always returns an empty set.
+</Note>
+
+---
+
+## King of the Hill
+
+Win by getting your king to one of the four center squares.
+
+### Rules
+
+- Normal chess rules apply
+- Win by moving your king to e4, e5, d4, or d5
+- Standard checkmate also wins
+- No insufficient material (you can always aim for the center)
+
+### Usage
+
+```typescript
+import { KingOfTheHill } from 'chessops/variant';
+import { SquareSet } from 'chessops/squareSet';
+
+const pos = KingOfTheHill.default();
+
+// Play moves
+pos.play({ from: 12, to: 28 }); // e2-e4
+
+// Check if game ended (king in center)
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  console.log(`${outcome?.winner} got their king to the center!`);
+}
+
+// The center squares
+const center = SquareSet.center(); // d4, e4, d5, e5
+```
+
+### Win Conditions
+
+From variant.ts:372-381:
+
+```typescript
+isVariantEnd(): boolean {
+  return this.board.king.intersects(SquareSet.center());
+}
+
+variantOutcome(_ctx?: Context): Outcome | undefined {
+  for (const color of COLORS) {
+    if (this.board.pieces(color, 'king').intersects(SquareSet.center())) {
+      return { winner: color };
+    }
+  }
+  return;
+}
+```
+
+### Strategy
+
+```typescript
+const pos = KingOfTheHill.default();
+
+// Check if king can reach center
+const whiteKing = pos.board.kingOf('white');
+if (whiteKing !== undefined) {
+  const kingMoves = pos.dests(whiteKing);
+  const canReachCenter = kingMoves.intersects(SquareSet.center());
+  
+  if (canReachCenter) {
+    console.log('King can win by moving to center!');
+  }
+}
+```
+
+<Note>
+King of the Hill always returns `false` for `hasInsufficientMaterial()` since you can always try to get your king to the center.
+</Note>
+
+---
+
+## Three-check
+
+Win by giving check three times.
+
+### Rules
+
+- Normal chess rules apply
+- Each player starts with 3 remaining checks
+- Win by giving check 3 times (reducing opponent's count to 0)
+- Standard checkmate also wins
+- Remaining checks are tracked in the position
+
+### Usage
+
+```typescript
+import { ThreeCheck } from 'chessops/variant';
+import { RemainingChecks } from 'chessops/setup';
+
+const pos = ThreeCheck.default();
+
+// Check remaining checks
+if (pos.remainingChecks) {
+  console.log('White remaining:', pos.remainingChecks.white); // 3
+  console.log('Black remaining:', pos.remainingChecks.black); // 3
+}
+
+// After giving check, the count decreases automatically
+pos.play({ from: 12, to: 28 }); // Some checking move
+
+// Check if game ended
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  console.log(`${outcome?.winner} gave 3 checks!`);
+}
+```
+
+### Setup with Custom Checks
+
+```typescript
+import { ThreeCheck } from 'chessops/variant';
+import { RemainingChecks } from 'chessops/setup';
+import { parseFen } from 'chessops/fen';
+
+const setup = parseFen(
+  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+).unwrap();
+
+// Set custom remaining checks
+setup.remainingChecks = new RemainingChecks(3, 3);
+setup.remainingChecks.white = 2; // White has given 1 check already
+setup.remainingChecks.black = 3;
+
+const result = ThreeCheck.fromSetup(setup);
+```
+
+### Win Conditions
+
+From variant.ts:419-430:
+
+```typescript
+isVariantEnd(): boolean {
+  return !!this.remainingChecks && 
+    (this.remainingChecks.white <= 0 || this.remainingChecks.black <= 0);
+}
+
+variantOutcome(_ctx?: Context): Outcome | undefined {
+  if (this.remainingChecks) {
+    for (const color of COLORS) {
+      if (this.remainingChecks[color] <= 0) {
+        return { winner: color };
+      }
+    }
+  }
+  return;
+}
+```
+
+### Insufficient Material
+
+```typescript
+// Only bare king is insufficient material
+const pos = ThreeCheck.default();
+
+const isInsufficient = pos.hasInsufficientMaterial('white');
+// Returns true only if white has only their king
+```
+
+---
+
+## Horde
+
+White has 36 pawns and pieces vs Black's normal army. White has no king.
+
+### Rules
+
+- White starts with 36 pawns (no king)
+- Black has standard pieces including king
+- White wins by capturing all black pieces
+- Black wins by checkmating (white has no king but game uses normal rules)
+- White cannot castle (no king)
+
+### Usage
+
+```typescript
+import { Horde } from 'chessops/variant';
+
+const pos = Horde.default();
+
+// White has no king
+const whiteKing = pos.board.kingOf('white');
+console.log('White king:', whiteKing); // undefined
+
+// Black has normal setup
+const blackKing = pos.board.kingOf('black');
+console.log('Black has king:', blackKing !== undefined);
+
+// Check win conditions
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  if (outcome?.winner === 'white') {
+    console.log('White captured all black pieces!');
+  } else {
+    console.log('Black captured all white pieces!');
+  }
+}
+```
+
+### Starting Position
+
+From variant.ts:540-553:
+
+```typescript
+const hordeBoard = (): Board => {
+  const board = Board.empty();
+  board.occupied = new SquareSet(0xffff_ffff, 0xffff_0066);
+  board.white = new SquareSet(0xffff_ffff, 0x0000_0066);
+  board.black = new SquareSet(0, 0xffff_0000);
+  board.pawn = new SquareSet(0xffff_ffff, 0x00ff_0066);
+  board.knight = new SquareSet(0, 0x4200_0000);
+  board.bishop = new SquareSet(0, 0x2400_0000);
+  board.rook = new SquareSet(0, 0x8100_0000);
+  board.queen = new SquareSet(0, 0x0800_0000);
+  board.king = new SquareSet(0, 0x1000_0000);
+  return board;
+};
+```
+
+### Win Conditions
+
+```typescript
+// Game ends when either side has no pieces
+if (pos.board.white.isEmpty()) {
+  return { winner: 'black' };
+}
+if (pos.board.black.isEmpty()) {
+  return { winner: 'white' };
+}
+```
+
+### Validation
+
+From variant.ts:588-605:
+
+```typescript
+protected validate(): Result<undefined, PositionError> {
+  if (this.board.occupied.isEmpty()) 
+    return Result.err(new PositionError(IllegalSetup.Empty));
+  
+  // Exactly one king (black's)
+  if (this.board.king.size() !== 1) 
+    return Result.err(new PositionError(IllegalSetup.Kings));
+
+  // Cannot give check to opponent's king
+  const otherKing = this.board.kingOf(opposite(this.turn));
+  if (defined(otherKing) && 
+      this.kingAttackers(otherKing, this.turn, this.board.occupied).nonEmpty()) {
+    return Result.err(new PositionError(IllegalSetup.OppositeCheck));
+  }
+  
+  // Pawn placement rules
+  for (const color of COLORS) {
+    const backranks = this.board.pieces(color, 'king').isEmpty()
+      ? SquareSet.backrank(opposite(color))
+      : SquareSet.backranks();
+    if (this.board.pieces(color, 'pawn').intersects(backranks)) {
+      return Result.err(new PositionError(IllegalSetup.PawnsOnBackrank));
+    }
+  }
+  return Result.ok(undefined);
+}
+```
+
+<Warning>
+Horde has complex insufficient material rules (variant.ts:607-813). The side with the king can always win by capturing the horde, but the horde may have insufficient material depending on piece composition.
+</Warning>
+
+---
+
+## Racing Kings
+
+Race your king to the 8th rank. No checks allowed!
+
+### Rules
+
+- Both kings start on the first rank
+- Win by getting your king to the 8th rank first
+- Cannot give check (all checking moves are illegal)
+- If white reaches 8th rank, black gets one more move to tie
+- No castling
+- No pawns in this variant
+
+### Usage
+
+```typescript
+import { RacingKings } from 'chessops/variant';
+import { SquareSet } from 'chessops/squareSet';
+
+const pos = RacingKings.default();
+
+// Get legal moves (no checks allowed)
+const dests = pos.dests(square);
+
+// Check if a king reached the goal
+const goal = SquareSet.fromRank(7); // 8th rank
+if (pos.board.king.intersects(goal)) {
+  console.log('A king reached the 8th rank!');
+}
+
+// Check game end
+if (pos.isVariantEnd()) {
+  const outcome = pos.variantOutcome();
+  if (outcome?.winner === undefined) {
+    console.log('Both kings reached - Draw!');
+  } else {
+    console.log(`${outcome.winner} wins the race!`);
+  }
+}
+```
+
+### Starting Position
+
+From variant.ts:433-446:
+
+```typescript
+const racingKingsBoard = (): Board => {
+  const board = Board.empty();
+  board.occupied = new SquareSet(0xffff, 0);
+  board.white = new SquareSet(0xf0f0, 0);
+  board.black = new SquareSet(0x0f0f, 0);
+  board.pawn = SquareSet.empty(); // No pawns!
+  board.knight = new SquareSet(0x1818, 0);
+  board.bishop = new SquareSet(0x2424, 0);
+  board.rook = new SquareSet(0x4242, 0);
+  board.queen = new SquareSet(0x0081, 0);
+  board.king = new SquareSet(0x8100, 0);
+  return board;
+};
+```
+
+### No Checks Allowed
+
+From variant.ts:490-506:
+
+```typescript
+dests(square: Square, ctx?: Context): SquareSet {
+  ctx = ctx || this.ctx();
+
+  // Kings cannot give check
+  if (square === ctx.king) return super.dests(square, ctx);
+
+  // Do not allow giving check
+  let dests = SquareSet.empty();
+  for (const to of super.dests(square, ctx)) {
+    const move = { from: square, to };
+    const after = this.clone();
+    after.play(move);
+    if (!after.isCheck()) dests = dests.with(to);
+  }
+  return dests;
+}
+```
+
+### Win Conditions
+
+From variant.ts:512-537:
+
+```typescript
+isVariantEnd(): boolean {
+  const goal = SquareSet.fromRank(7);
+  const inGoal = this.board.king.intersect(goal);
+  if (inGoal.isEmpty()) return false;
+  if (this.turn === 'white' || inGoal.intersects(this.board.black)) 
+    return true;
+
+  // White reached backrank. Check if black can catch up.
+  const blackKing = this.board.kingOf('black');
+  if (defined(blackKing)) {
+    const occ = this.board.occupied.without(blackKing);
+    for (const target of kingAttacks(blackKing).intersect(goal).diff(this.board.black)) {
+      if (this.kingAttackers(target, 'white', occ).isEmpty()) 
+        return false;
+    }
+  }
+  return true;
+}
+
+variantOutcome(ctx?: Context): Outcome | undefined {
+  if (ctx ? !ctx.variantEnd : !this.isVariantEnd()) return;
+  const goal = SquareSet.fromRank(7);
+  const blackInGoal = this.board.pieces('black', 'king').intersects(goal);
+  const whiteInGoal = this.board.pieces('white', 'king').intersects(goal);
+  if (blackInGoal && !whiteInGoal) return { winner: 'black' };
+  if (whiteInGoal && !blackInGoal) return { winner: 'white' };
+  return { winner: undefined }; // Draw
+}
+```
+
+### Validation
+
+```typescript
+protected validate(): Result<undefined, PositionError> {
+  // Position is invalid if:
+  // - There is a check
+  // - There are any pawns
+  if (this.isCheck() || this.board.pawn.nonEmpty()) {
+    return Result.err(new PositionError(IllegalSetup.Variant));
+  }
+  return super.validate();
+}
+```
+
+<Note>
+Racing Kings never has insufficient material - both players can always race their king to the 8th rank.
+</Note>
+
+---
+
+## Summary Table
+
+| Variant | Win Condition | Special Rules |
+|---------|---------------|---------------|
+| **Antichess** | Lose all pieces or get stalemated | Forced captures, no check |
+| **King of the Hill** | King reaches center (d4/d5/e4/e5) | Normal chess + center goal |
+| **Three-check** | Give check 3 times | Tracks remaining checks |
+| **Horde** | Eliminate opponent | White has 36 pawns, no king |
+| **Racing Kings** | King reaches 8th rank first | No checks allowed, no pawns |
+
+## Complete Example
+
+```typescript
+import {
+  Antichess,
+  KingOfTheHill,
+  ThreeCheck,
+  Horde,
+  RacingKings
+} from 'chessops/variant';
+import { defaultPosition } from 'chessops/variant';
+import { Rules } from 'chessops/types';
+
+// Create all variants
+const variants = {
+  antichess: Antichess.default(),
+  koth: KingOfTheHill.default(),
+  threecheck: ThreeCheck.default(),
+  horde: Horde.default(),
+  racingkings: RacingKings.default()
+};
+
+// Or use helper function
+const variant: Rules = '3check';
+const pos = defaultPosition(variant);
+
+// Check variant-specific properties
+if (pos.rules === '3check' && pos.remainingChecks) {
+  console.log('Remaining checks:', pos.remainingChecks);
+}
+
+if (pos.rules === 'antichess') {
+  const ctx = pos.ctx();
+  if (ctx.mustCapture) {
+    console.log('Forced to capture!');
+  }
+}
+
+// All variants support the same base API
+for (const [name, position] of Object.entries(variants)) {
+  console.log(`${name}:`);
+  console.log('  Turn:', position.turn);
+  console.log('  Is variant end:', position.isVariantEnd());
+  
+  const outcome = position.variantOutcome();
+  if (outcome) {
+    console.log('  Winner:', outcome.winner);
+  }
+}
+```
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Variant Overview" icon="chess-board" href="/variants/overview">
+    See all supported variants
+  </Card>
+  <Card title="Crazyhouse" icon="box" href="/variants/crazyhouse">
+    Piece drops variant
+  </Card>
+  <Card title="Atomic" icon="atom" href="/variants/atomic">
+    Explosive captures
+  </Card>
+</CardGroup>

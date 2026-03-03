@@ -1,0 +1,256 @@
+---
+title: Basic Usage
+description: Learn how to create positions, make moves, and play simple chess games with chessops
+---
+
+This guide covers the fundamental operations in chessops: creating positions, making moves, and playing through a simple game.
+
+## Creating a Position
+
+Chessops provides multiple ways to create chess positions.
+
+### Starting Position
+
+<CodeGroup>
+```typescript Default Position
+import { Chess } from 'chessops/chess';
+
+// Create the starting position
+const pos = Chess.default();
+console.log(pos.turn); // 'white'
+console.log(pos.fullmoves); // 1
+```
+
+```typescript From FEN
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Parse a FEN string
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+```
+
+```typescript Custom Position
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Scholar's mate position
+const fen = 'r1bqkbnr/ppp2Qpp/2np4/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4';
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+console.log(pos.isCheckmate()); // true
+```
+</CodeGroup>
+
+## Making Moves
+
+Moves can be created using square indices, UCI notation, or SAN notation.
+
+<Steps>
+
+<Step title="Understanding Square Indices">
+Squares are represented as numbers 0-63, where 0 is a1, 7 is h1, 56 is a8, and 63 is h8.
+
+```typescript
+import { parseSquare, makeSquare } from 'chessops/util';
+
+// Convert square names to indices
+const e2 = parseSquare('e2'); // 12
+const e4 = parseSquare('e4'); // 28
+
+// Convert indices back to names
+const square = makeSquare(12); // 'e2'
+```
+</Step>
+
+<Step title="Creating Moves">
+<CodeGroup>
+```typescript Using Square Indices
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+
+// Move from e2 to e4 (indices 12 to 28)
+const move = { from: 12, to: 28 };
+pos.play(move);
+```
+
+```typescript Using UCI Notation
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+
+// Parse UCI move notation
+const move = parseUci('e2e4')!;
+pos.play(move);
+```
+
+```typescript Using SAN Notation
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+
+const pos = Chess.default();
+
+// Parse standard algebraic notation
+const move = parseSan(pos, 'e4')!;
+pos.play(move);
+```
+</CodeGroup>
+</Step>
+
+<Step title="Handling Promotions">
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { parseSan } from 'chessops/san';
+
+// Position with pawn ready to promote
+const setup = parseFen('4k3/P7/8/8/8/8/8/4K3 w - - 0 1').unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Promote to queen
+const move = parseSan(pos, 'a8=Q')!;
+pos.play(move);
+
+// Or using square indices
+const queenPromotion = { from: 48, to: 56, promotion: 'queen' as const };
+```
+</Step>
+
+</Steps>
+
+## Playing a Complete Game
+
+Here's how to play through the famous "Fool's Mate" - the shortest possible checkmate.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseSan } from 'chessops/san';
+import { makeFen } from 'chessops/fen';
+
+// Start a new game
+const pos = Chess.default();
+
+// Play the moves
+const moves = ['f3', 'e5', 'g4', 'Qh4#'];
+
+for (const san of moves) {
+  const move = parseSan(pos, san);
+  if (!move) {
+    console.error(`Invalid move: ${san}`);
+    break;
+  }
+  
+  console.log(`Playing: ${san}`);
+  pos.play(move);
+  
+  // Check game state after each move
+  if (pos.isCheck()) {
+    console.log('Check!');
+  }
+  if (pos.isCheckmate()) {
+    console.log('Checkmate!');
+    break;
+  }
+}
+
+// Final position
+console.log(pos.isCheckmate()); // true
+console.log(makeFen(pos.toSetup()));
+// Output: rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3
+```
+
+## Cloning Positions
+
+Always clone a position before making moves if you want to preserve the original.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseUci } from 'chessops/util';
+
+const original = Chess.default();
+
+// Try different moves without affecting the original
+const withE4 = original.clone();
+withE4.play(parseUci('e2e4')!);
+
+const withD4 = original.clone();
+withD4.play(parseUci('d2d4')!);
+
+// Original position is unchanged
+console.log(original.fullmoves); // 1
+```
+
+## Converting Positions
+
+Convert positions to various formats for storage or display.
+
+<CodeGroup>
+```typescript To FEN
+import { Chess } from 'chessops/chess';
+import { makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+
+const pos = Chess.default();
+pos.play(parseUci('e2e4')!);
+
+const fen = makeFen(pos.toSetup());
+console.log(fen);
+// Output: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+```
+
+```typescript To Setup Object
+import { Chess } from 'chessops/chess';
+
+const pos = Chess.default();
+const setup = pos.toSetup();
+
+console.log(setup.turn); // 'white'
+console.log(setup.fullmoves); // 1
+console.log(setup.halfmoves); // 0
+```
+</CodeGroup>
+
+## Error Handling
+
+Chessops uses the Result type for operations that can fail. Always unwrap results properly.
+
+```typescript
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Invalid FEN
+const result = parseFen('invalid fen string');
+
+if (result.isOk) {
+  const setup = result.value;
+  // Use setup
+} else {
+  console.error('Failed to parse FEN:', result.error);
+}
+
+// Or use unwrap() if you're certain it will succeed
+const setup = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').unwrap();
+
+// Creating a position from invalid setup
+const posResult = Chess.fromSetup(setup);
+if (posResult.isOk) {
+  const pos = posResult.value;
+  // Use position
+} else {
+  console.error('Invalid position:', posResult.error);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Move Generation" icon="chess" href="/examples/move-generation">
+    Learn how to generate and validate legal moves
+  </Card>
+  <Card title="Position Analysis" icon="magnifying-glass" href="/examples/position-analysis">
+    Analyze positions for checks, checkmate, and more
+  </Card>
+</CardGroup>

@@ -1,0 +1,529 @@
+---
+title: Board
+description: Piece positions on a chess board
+---
+
+## Overview
+
+`Board` represents piece positions on a chess board. It stores pieces as sets of squares (`SquareSet`) organized by color and role. The class is iterable and provides methods for querying and modifying the board state.
+
+```typescript
+import { Board } from 'chessops';
+
+const board = Board.default();
+console.log(board.occupied.size()); // 32
+```
+
+## Properties
+
+<ResponseField name="occupied" type="SquareSet">
+  All occupied squares on the board
+</ResponseField>
+
+<ResponseField name="promoted" type="SquareSet">
+  All squares occupied by pieces known to be promoted. This information is relevant in chess variants like Crazyhouse.
+</ResponseField>
+
+<ResponseField name="white" type="SquareSet">
+  All squares occupied by white pieces
+</ResponseField>
+
+<ResponseField name="black" type="SquareSet">
+  All squares occupied by black pieces
+</ResponseField>
+
+<ResponseField name="pawn" type="SquareSet">
+  All squares occupied by pawns
+</ResponseField>
+
+<ResponseField name="knight" type="SquareSet">
+  All squares occupied by knights
+</ResponseField>
+
+<ResponseField name="bishop" type="SquareSet">
+  All squares occupied by bishops
+</ResponseField>
+
+<ResponseField name="rook" type="SquareSet">
+  All squares occupied by rooks
+</ResponseField>
+
+<ResponseField name="queen" type="SquareSet">
+  All squares occupied by queens
+</ResponseField>
+
+<ResponseField name="king" type="SquareSet">
+  All squares occupied by kings
+</ResponseField>
+
+## Static Factory Methods
+
+### default
+
+```typescript
+static default(): Board
+```
+
+Creates a board with pieces in the standard chess starting position.
+
+```typescript
+const board = Board.default();
+console.log(board.get(0)); // { color: 'white', role: 'rook', promoted: false }
+```
+
+### empty
+
+```typescript
+static empty(): Board
+```
+
+Creates an empty board with no pieces.
+
+```typescript
+const board = Board.empty();
+console.log(board.occupied.isEmpty()); // true
+```
+
+## Instance Methods
+
+### reset
+
+```typescript
+reset(): void
+```
+
+Resets all pieces to the default starting position for standard chess. Mutates the board in place.
+
+```typescript
+const board = Board.empty();
+board.reset();
+console.log(board.occupied.size()); // 32
+```
+
+### clear
+
+```typescript
+clear(): void
+```
+
+Removes all pieces from the board. Mutates the board in place.
+
+```typescript
+const board = Board.default();
+board.clear();
+console.log(board.occupied.isEmpty()); // true
+```
+
+### clone
+
+```typescript
+clone(): Board
+```
+
+Creates a deep copy of the board.
+
+```typescript
+const board = Board.default();
+const copy = board.clone();
+
+// Modifications to copy don't affect original
+copy.clear();
+console.log(board.occupied.nonEmpty()); // true
+console.log(copy.occupied.isEmpty()); // true
+```
+
+### get
+
+```typescript
+get(square: Square): Piece | undefined
+```
+
+Returns the piece at the given square, or undefined if the square is empty.
+
+<ParamField path="square" type="Square" required>
+  The square to query (0-63)
+</ParamField>
+
+<ResponseField name="returns" type="Piece | undefined">
+  An object with `color`, `role`, and `promoted` properties, or undefined
+</ResponseField>
+
+```typescript
+const piece = board.get(28); // e4
+if (piece) {
+  console.log(`${piece.color} ${piece.role}`);
+}
+```
+
+### getColor
+
+```typescript
+getColor(square: Square): Color | undefined
+```
+
+Returns the color of the piece at the given square.
+
+<ParamField path="square" type="Square" required>
+  The square to query (0-63)
+</ParamField>
+
+<ResponseField name="returns" type="Color | undefined">
+  Either 'white', 'black', or undefined if the square is empty
+</ResponseField>
+
+```typescript
+const color = board.getColor(0);
+console.log(color); // 'white' for a1 in starting position
+```
+
+### getRole
+
+```typescript
+getRole(square: Square): Role | undefined
+```
+
+Returns the role of the piece at the given square.
+
+<ParamField path="square" type="Square" required>
+  The square to query (0-63)
+</ParamField>
+
+<ResponseField name="returns" type="Role | undefined">
+  One of 'pawn', 'knight', 'bishop', 'rook', 'queen', 'king', or undefined
+</ResponseField>
+
+```typescript
+const role = board.getRole(0);
+console.log(role); // 'rook' for a1 in starting position
+```
+
+### set
+
+```typescript
+set(square: Square, piece: Piece): Piece | undefined
+```
+
+Puts a piece onto a square, potentially replacing an existing piece. Returns the replaced piece if any.
+
+<ParamField path="square" type="Square" required>
+  The square to place the piece on (0-63)
+</ParamField>
+
+<ParamField path="piece" type="Piece" required>
+  The piece to place, with `color`, `role`, and optionally `promoted` properties
+</ParamField>
+
+<ResponseField name="returns" type="Piece | undefined">
+  The piece that was replaced, if any
+</ResponseField>
+
+```typescript
+const oldPiece = board.set(28, {
+  color: 'white',
+  role: 'queen',
+  promoted: false
+});
+```
+
+### take
+
+```typescript
+take(square: Square): Piece | undefined
+```
+
+Removes and returns the piece from the given square, if any.
+
+<ParamField path="square" type="Square" required>
+  The square to remove the piece from (0-63)
+</ParamField>
+
+<ResponseField name="returns" type="Piece | undefined">
+  The removed piece, if any
+</ResponseField>
+
+```typescript
+const piece = board.take(28);
+if (piece) {
+  console.log('Removed', piece.role);
+}
+```
+
+### has
+
+```typescript
+has(square: Square): boolean
+```
+
+Checks if a square is occupied.
+
+<ParamField path="square" type="Square" required>
+  The square to check (0-63)
+</ParamField>
+
+```typescript
+if (board.has(28)) {
+  console.log('e4 is occupied');
+}
+```
+
+### pieces
+
+```typescript
+pieces(color: Color, role: Role): SquareSet
+```
+
+Returns the set of squares occupied by pieces of the given color and role.
+
+<ParamField path="color" type="Color" required>
+  Either 'white' or 'black'
+</ParamField>
+
+<ParamField path="role" type="Role" required>
+  One of 'pawn', 'knight', 'bishop', 'rook', 'queen', 'king'
+</ParamField>
+
+```typescript
+const whiteKnights = board.pieces('white', 'knight');
+console.log('White has', whiteKnights.size(), 'knights');
+```
+
+### kingOf
+
+```typescript
+kingOf(color: Color): Square | undefined
+```
+
+Finds the unique king of the given color, if any.
+
+<ParamField path="color" type="Color" required>
+  Either 'white' or 'black'
+</ParamField>
+
+<ResponseField name="returns" type="Square | undefined">
+  The square of the king, or undefined if not found or multiple kings exist
+</ResponseField>
+
+```typescript
+const whiteKing = board.kingOf('white');
+if (whiteKing !== undefined) {
+  console.log('White king on square', whiteKing);
+}
+```
+
+### rooksAndQueens
+
+```typescript
+rooksAndQueens(): SquareSet
+```
+
+Returns all squares occupied by rooks or queens.
+
+```typescript
+const sliders = board.rooksAndQueens();
+```
+
+### bishopsAndQueens
+
+```typescript
+bishopsAndQueens(): SquareSet
+```
+
+Returns all squares occupied by bishops or queens.
+
+```typescript
+const diagonalSliders = board.bishopsAndQueens();
+```
+
+### steppers
+
+```typescript
+steppers(): SquareSet
+```
+
+Returns all squares occupied by knights, pawns, or kings (pieces that move in discrete steps).
+
+```typescript
+const steppers = board.steppers();
+```
+
+### sliders
+
+```typescript
+sliders(): SquareSet
+```
+
+Returns all squares occupied by bishops, rooks, or queens (pieces that slide).
+
+```typescript
+const sliders = board.sliders();
+```
+
+### [Symbol.iterator]
+
+```typescript
+[Symbol.iterator](): Iterator<[Square, Piece]>
+```
+
+Iterates through all pieces on the board as [square, piece] tuples.
+
+```typescript
+for (const [square, piece] of board) {
+  console.log(`${piece.color} ${piece.role} on square ${square}`);
+}
+
+// Or destructure in other ways
+const pieces = Array.from(board);
+```
+
+## Utility Functions
+
+### boardEquals
+
+```typescript
+boardEquals(left: Board, right: Board): boolean
+```
+
+Compares two boards for equality.
+
+<ParamField path="left" type="Board" required>
+  First board to compare
+</ParamField>
+
+<ParamField path="right" type="Board" required>
+  Second board to compare
+</ParamField>
+
+```typescript
+import { boardEquals } from 'chessops/board';
+
+const board1 = Board.default();
+const board2 = Board.default();
+
+if (boardEquals(board1, board2)) {
+  console.log('Boards are identical');
+}
+```
+
+## Examples
+
+### Creating a Custom Position
+
+```typescript
+import { Board } from 'chessops';
+import { parseSquare } from 'chessops/util';
+
+const board = Board.empty();
+
+// Place white king on e1
+board.set(parseSquare('e1')!, {
+  color: 'white',
+  role: 'king',
+  promoted: false
+});
+
+// Place black king on e8
+board.set(parseSquare('e8')!, {
+  color: 'black',
+  role: 'king',
+  promoted: false
+});
+
+// Place white queen on d1
+board.set(parseSquare('d1')!, {
+  color: 'white',
+  role: 'queen',
+  promoted: false
+});
+```
+
+### Analyzing Material
+
+```typescript
+const board = Board.default();
+
+// Count pieces for each side
+const whitePawns = board.pieces('white', 'pawn').size();
+const blackPawns = board.pieces('black', 'pawn').size();
+const whiteKnights = board.pieces('white', 'knight').size();
+
+console.log(`White has ${whitePawns} pawns and ${whiteKnights} knights`);
+
+// Check for specific pieces
+if (board.pieces('white', 'queen').nonEmpty()) {
+  console.log('White still has queen');
+}
+```
+
+### Iterating Over Specific Pieces
+
+```typescript
+const board = Board.default();
+const whitePieces = board.white;
+
+for (const [square, piece] of board) {
+  if (piece.color === 'white' && piece.role === 'pawn') {
+    console.log('White pawn on square', square);
+  }
+}
+
+// Or filter using SquareSet
+for (const square of board.pieces('black', 'knight')) {
+  console.log('Black knight on square', square);
+}
+```
+
+### Moving Pieces
+
+```typescript
+const board = Board.default();
+
+// Move e2 pawn to e4
+const from = 12; // e2
+const to = 28;   // e4
+
+const piece = board.take(from);
+if (piece) {
+  board.set(to, piece);
+}
+```
+
+### Checking Board State
+
+```typescript
+const board = Board.default();
+
+// Count total pieces
+console.log('Total pieces:', board.occupied.size());
+
+// Check if square is attacked by sliders
+const targetSquare = 28; // e4
+const sliders = board.sliders();
+const enemySliders = sliders.intersect(board.black);
+
+for (const slider of enemySliders) {
+  // Use attack functions to check if slider attacks target
+  console.log('Slider on square', slider);
+}
+```
+
+### Working with Promoted Pieces
+
+```typescript
+const board = Board.empty();
+
+// Place a promoted queen (from pawn promotion)
+board.set(56, { // a8
+  color: 'white',
+  role: 'queen',
+  promoted: true
+});
+
+// Check for promoted pieces
+for (const [square, piece] of board) {
+  if (piece.promoted) {
+    console.log(`Promoted ${piece.role} on square ${square}`);
+  }
+}
+
+console.log('Promoted pieces:', board.promoted.size());
+```

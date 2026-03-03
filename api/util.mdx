@@ -1,0 +1,341 @@
+---
+title: 'util'
+description: 'Utility functions for working with chess types, coordinates, and moves'
+---
+
+## Overview
+
+The `util` module provides utility functions for converting between different representations of chess concepts, manipulating coordinates, parsing and formatting moves, and performing common chess-related operations.
+
+## Type Utilities
+
+### defined
+
+```typescript
+function defined<A>(v: A | undefined): v is A
+```
+
+Type guard to check if a value is defined (not undefined).
+
+<ParamField path="v" type="A | undefined" required>
+  The value to check.
+</ParamField>
+
+**Returns:** `true` if the value is not `undefined`, `false` otherwise.
+
+**Example:**
+```typescript
+const square = parseSquare('e4');
+if (defined(square)) {
+  console.log(`Square index: ${square}`);
+}
+```
+
+### opposite
+
+```typescript
+function opposite(color: Color): Color
+```
+
+Returns the opposite color.
+
+<ParamField path="color" type="Color" required>
+  The color to invert.
+</ParamField>
+
+**Returns:** `'black'` if `color` is `'white'`, otherwise `'white'`.
+
+**Example:**
+```typescript
+const turn: Color = 'white';
+const nextTurn = opposite(turn); // 'black'
+```
+
+## Square Utilities
+
+### squareRank
+
+```typescript
+function squareRank(square: Square): number
+```
+
+Extracts the rank (row) from a square index.
+
+<ParamField path="square" type="Square" required>
+  The square index (0-63).
+</ParamField>
+
+**Returns:** The rank as a number from 0 (rank 1) to 7 (rank 8).
+
+**Example:**
+```typescript
+const e4 = 28;
+const rank = squareRank(e4); // 3 (rank 4)
+```
+
+### squareFile
+
+```typescript
+function squareFile(square: Square): number
+```
+
+Extracts the file (column) from a square index.
+
+<ParamField path="square" type="Square" required>
+  The square index (0-63).
+</ParamField>
+
+**Returns:** The file as a number from 0 (file a) to 7 (file h).
+
+**Example:**
+```typescript
+const e4 = 28;
+const file = squareFile(e4); // 4 (file e)
+```
+
+### squareFromCoords
+
+```typescript
+function squareFromCoords(file: number, rank: number): Square | undefined
+```
+
+Creates a square index from file and rank coordinates.
+
+<ParamField path="file" type="number" required>
+  The file as a number from 0 (a) to 7 (h).
+</ParamField>
+
+<ParamField path="rank" type="number" required>
+  The rank as a number from 0 (1) to 7 (8).
+</ParamField>
+
+**Returns:** The square index (0-63), or `undefined` if coordinates are out of bounds.
+
+**Example:**
+```typescript
+const e4 = squareFromCoords(4, 3); // 28
+const invalid = squareFromCoords(8, 0); // undefined
+```
+
+### parseSquare
+
+```typescript
+function parseSquare(str: SquareName): Square
+function parseSquare(str: string): Square | undefined
+```
+
+Parses a square name in algebraic notation to a square index.
+
+<ParamField path="str" type="string" required>
+  The square name (e.g., 'e4', 'a1').
+</ParamField>
+
+**Returns:** The square index (0-63), or `undefined` if the string is not a valid square name.
+
+**Example:**
+```typescript
+const e4 = parseSquare('e4'); // 28
+const a1 = parseSquare('a1'); // 0
+const invalid = parseSquare('z9'); // undefined
+```
+
+### makeSquare
+
+```typescript
+function makeSquare(square: Square): SquareName
+```
+
+Converts a square index to algebraic notation.
+
+<ParamField path="square" type="Square" required>
+  The square index (0-63).
+</ParamField>
+
+**Returns:** The square name in algebraic notation.
+
+**Example:**
+```typescript
+const name = makeSquare(28); // 'e4'
+const corner = makeSquare(0); // 'a1'
+```
+
+## Role Conversion
+
+### roleToChar
+
+```typescript
+function roleToChar(role: Role): RoleChar
+```
+
+Converts a piece role to its single-character representation.
+
+<ParamField path="role" type="Role" required>
+  The piece role.
+</ParamField>
+
+**Returns:** The single-character role identifier.
+
+**Example:**
+```typescript
+const char = roleToChar('knight'); // 'n'
+const queenChar = roleToChar('queen'); // 'q'
+```
+
+### charToRole
+
+```typescript
+function charToRole(ch: RoleChar | Uppercase<RoleChar>): Role
+function charToRole(ch: string): Role | undefined
+```
+
+Converts a character to a piece role. Case-insensitive.
+
+<ParamField path="ch" type="string" required>
+  The character to convert (e.g., 'n', 'N', 'q').
+</ParamField>
+
+**Returns:** The piece role, or `undefined` if the character is not a valid role character.
+
+**Example:**
+```typescript
+const role = charToRole('n'); // 'knight'
+const upper = charToRole('Q'); // 'queen'
+const invalid = charToRole('x'); // undefined
+```
+
+## Move Utilities
+
+### parseUci
+
+```typescript
+function parseUci(str: string): Move | undefined
+```
+
+Parses a move in UCI (Universal Chess Interface) notation.
+
+<ParamField path="str" type="string" required>
+  The UCI move string.
+</ParamField>
+
+**Returns:** The parsed move, or `undefined` if the string is not valid UCI notation.
+
+**Formats supported:**
+- Normal move: `'e2e4'`
+- Promotion: `'e7e8q'`
+- Drop move: `'N@f3'`
+
+**Example:**
+```typescript
+const move = parseUci('e2e4'); // { from: 12, to: 28 }
+const promotion = parseUci('e7e8q'); // { from: 52, to: 60, promotion: 'queen' }
+const drop = parseUci('N@f3'); // { role: 'knight', to: 21 }
+const invalid = parseUci('xyz'); // undefined
+```
+
+### makeUci
+
+```typescript
+function makeUci(move: Move): string
+```
+
+Converts a move to UCI notation.
+
+<ParamField path="move" type="Move" required>
+  The move to convert.
+</ParamField>
+
+**Returns:** The move in UCI notation.
+
+**Output formats:**
+- Normal move: `'e2e4'`
+- Promotion: `'e7e8q'`
+- Drop move: `'N@f3'` (uppercase piece letter)
+
+**Example:**
+```typescript
+const uci = makeUci({ from: 12, to: 28 }); // 'e2e4'
+const withPromo = makeUci({ from: 52, to: 60, promotion: 'queen' }); // 'e7e8q'
+const drop = makeUci({ role: 'knight', to: 21 }); // 'N@f3'
+```
+
+### moveEquals
+
+```typescript
+function moveEquals(left: Move, right: Move): boolean
+```
+
+Compares two moves for equality.
+
+<ParamField path="left" type="Move" required>
+  The first move.
+</ParamField>
+
+<ParamField path="right" type="Move" required>
+  The second move.
+</ParamField>
+
+**Returns:** `true` if the moves are equal, `false` otherwise.
+
+**Example:**
+```typescript
+const move1 = { from: 12, to: 28 };
+const move2 = { from: 12, to: 28 };
+const move3 = { from: 12, to: 29 };
+
+moveEquals(move1, move2); // true
+moveEquals(move1, move3); // false
+```
+
+## Castling Utilities
+
+### kingCastlesTo
+
+```typescript
+function kingCastlesTo(color: Color, side: CastlingSide): Square
+```
+
+Returns the square where the king ends up after castling.
+
+<ParamField path="color" type="Color" required>
+  The color of the castling player.
+</ParamField>
+
+<ParamField path="side" type="CastlingSide" required>
+  The castling side ('a' for queenside, 'h' for kingside).
+</ParamField>
+
+**Returns:** The destination square index for the king.
+
+**Example:**
+```typescript
+const whiteKingside = kingCastlesTo('white', 'h'); // 6 (g1)
+const whiteQueenside = kingCastlesTo('white', 'a'); // 2 (c1)
+const blackKingside = kingCastlesTo('black', 'h'); // 62 (g8)
+const blackQueenside = kingCastlesTo('black', 'a'); // 58 (c8)
+```
+
+### rookCastlesTo
+
+```typescript
+function rookCastlesTo(color: Color, side: CastlingSide): Square
+```
+
+Returns the square where the rook ends up after castling.
+
+<ParamField path="color" type="Color" required>
+  The color of the castling player.
+</ParamField>
+
+<ParamField path="side" type="CastlingSide" required>
+  The castling side ('a' for queenside, 'h' for kingside).
+</ParamField>
+
+**Returns:** The destination square index for the rook.
+
+**Example:**
+```typescript
+const whiteKingside = rookCastlesTo('white', 'h'); // 5 (f1)
+const whiteQueenside = rookCastlesTo('white', 'a'); // 3 (d1)
+const blackKingside = rookCastlesTo('black', 'h'); // 61 (f8)
+const blackQueenside = rookCastlesTo('black', 'a'); // 59 (d8)
+```
