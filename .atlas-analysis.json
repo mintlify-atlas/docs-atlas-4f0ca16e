@@ -1,0 +1,155 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "chessops",
+  "projectDescription": "Chess and chess variant rules and operations in TypeScript",
+  "theme": "sequoia",
+  "primaryColor": "#769656",
+  "lightColor": "#EEEED2",
+  "darkColor": "#312E2B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "core/types",
+              "core/squares-and-bitboards",
+              "core/board-and-positions",
+              "core/moves",
+              "core/game-rules"
+            ]
+          },
+          {
+            "group": "Working with Notation",
+            "pages": [
+              "notation/fen",
+              "notation/san",
+              "notation/pgn",
+              "notation/uci"
+            ]
+          },
+          {
+            "group": "Chess Variants",
+            "pages": [
+              "variants/overview",
+              "variants/crazyhouse",
+              "variants/atomic",
+              "variants/other-variants"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/attacks-and-rays",
+              "advanced/transformations",
+              "advanced/compatibility",
+              "advanced/performance"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-usage",
+              "examples/move-generation",
+              "examples/pgn-parsing",
+              "examples/position-analysis"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Types",
+            "pages": [
+              "api/types",
+              "api/util"
+            ]
+          },
+          {
+            "group": "Board Representation",
+            "pages": [
+              "api/square-set",
+              "api/board",
+              "api/setup"
+            ]
+          },
+          {
+            "group": "Position & Rules",
+            "pages": [
+              "api/chess",
+              "api/variant"
+            ]
+          },
+          {
+            "group": "Attacks & Movement",
+            "pages": [
+              "api/attacks"
+            ]
+          },
+          {
+            "group": "Notation",
+            "pages": [
+              "api/fen",
+              "api/san",
+              "api/pgn"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/transform",
+              "api/compat",
+              "api/debug"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Type-safe chess position representation with bitboards",
+    "FEN, PGN, and SAN notation parsing and writing",
+    "Legal move generation for chess and variants",
+    "Support for 8 chess variants including Chess960",
+    "Streaming PGN parser with game tree support",
+    "Attack calculation using Hyperbola Quintessence",
+    "Position validation and game outcome detection",
+    "Board transformations (mirroring, rotation)"
+  ],
+  "publicApiSurface": [
+    "Chess",
+    "Position",
+    "Board",
+    "SquareSet",
+    "parseFen",
+    "makeFen",
+    "parsePgn",
+    "makePgn",
+    "parseSan",
+    "makeSan",
+    "parseUci",
+    "makeUci",
+    "Crazyhouse",
+    "Atomic",
+    "Antichess",
+    "KingOfTheHill",
+    "ThreeCheck",
+    "Horde",
+    "RacingKings",
+    "attacks",
+    "between",
+    "ray"
+  ]
+}
